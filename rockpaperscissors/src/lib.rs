@@ -4,7 +4,6 @@ use ring::digest::SHA256_OUTPUT_LEN;
 use solana_sdk::pubkey::Pubkey;
 use anchor_lang::prelude::*;
 use solana_sdk::slot_history::Slot;
-use solana_sdk::sysvar::clock;
 
 pub fn verify_commitment(
     pubkey: Pubkey,
@@ -28,12 +27,6 @@ pub enum RPS {
     Scissors,
 }
 
-pub enum Result {
-    P1,
-    P2,
-    TIE,
-}
-
 impl From<RPS> for u8 {
     fn from(rps: RPS) -> Self {
         match rps {
@@ -43,6 +36,23 @@ impl From<RPS> for u8 {
         }
     }
 }
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, AnchorSerialize, AnchorDeserialize)]
+pub enum RESULT {
+    P1,
+    P2,
+    TIE,
+}
+impl From<RESULT> for u8 {
+    fn from(result: RESULT) -> Self {
+        match result {
+            RESULT::P1 => 0,
+            RESULT::P2 => 1,
+            RESULT::TIE => 2,
+        }
+    }
+}
+
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, AnchorSerialize, AnchorDeserialize)]
 pub enum PlayerState {
@@ -73,7 +83,7 @@ pub enum GameState {
         expiry_slot: Slot,
     },
     AcceptingSettle {
-        result: Result,
+        result: RESULT,
         player_1: PlayerState,
         player_2: PlayerState,
         config: GameConfig,
@@ -102,14 +112,13 @@ pub enum Actions {
     Settle,
 }
 
-pub fn process_action(state: GameState, action: Actions) -> GameState {
-    let clock = &Clock::get()?;
+pub fn process_action(state: GameState, action: Actions, slot: Slot) -> GameState {
     match (state, action) {
         (GameState::Initialized, Actions::CreateGame { player_1_pubkey, commitment, config }) => {
             GameState::AcceptingChallenge { 
                 config, 
                 player_1: PlayerState::Committed(player_1_pubkey, commitment),
-                expiry_slot: clock.slot + 2 * 60 * 5
+                expiry_slot: slot + 2 * 60 * 5
             }
         }
 
@@ -121,14 +130,14 @@ pub fn process_action(state: GameState, action: Actions) -> GameState {
             },
             Actions::JoinGame { player_2_pubkey, choice },
         ) => {
-            if clock.slot > expiry_slot {
+            if slot > expiry_slot {
                 panic!("challenge expired");
             }
             GameState::AcceptingReveal {
                 player_1,
                 player_2: PlayerState::Revealed(player_2_pubkey, choice),
                 config,
-                expiry_slot: clock.slot + 2 * 60 * 5
+                expiry_slot: slot + 2 * 60 * 5
             }
         },
         (
@@ -139,14 +148,14 @@ pub fn process_action(state: GameState, action: Actions) -> GameState {
             },
             Actions::ExpireGame { player},
         ) => {
-            if clock.slot < expiry_slot {
+            if slot < expiry_slot {
                 panic!("challenge not expired yet");
             }
             if player != p1 {
                 panic!("only player 1 can expire unmatched games");
             }
             GameState::AcceptingSettle {
-                result: Result::P1,
+                result: RESULT::P1,
                 player_1: PlayerState::Committed(p1, player_1_commitment),
                 player_2: PlayerState::Committed(p1, player_1_commitment),
                 config,
@@ -162,7 +171,7 @@ pub fn process_action(state: GameState, action: Actions) -> GameState {
             },
             Actions::Reveal { player_1_pubkey, salt, choice }
         ) => {
-            if clock.slot > expiry_slot {
+            if slot > expiry_slot {
                 panic!("challenge expired");
             }
             if p1 != player_1_pubkey {
@@ -172,13 +181,13 @@ pub fn process_action(state: GameState, action: Actions) -> GameState {
                 panic!("Invalid commitment");
             }
             let result = match (choice, player_2_choice) {
-                (RPS::Rock, RPS::Scissors) => Result::P1,
-                (RPS::Paper, RPS::Rock) => Result::P1,
-                (RPS::Scissors, RPS::Paper) => Result::P1,
-                (RPS::Rock, RPS::Paper) => Result::P2,
-                (RPS::Paper, RPS::Scissors) => Result::P2,
-                (RPS::Scissors, RPS::Rock) => Result::P2,
-                _ => Result::TIE,
+                (RPS::Rock, RPS::Scissors) => RESULT::P1,
+                (RPS::Paper, RPS::Rock) => RESULT::P1,
+                (RPS::Scissors, RPS::Paper) => RESULT::P1,
+                (RPS::Rock, RPS::Paper) => RESULT::P2,
+                (RPS::Paper, RPS::Scissors) => RESULT::P2,
+                (RPS::Scissors, RPS::Rock) => RESULT::P2,
+                _ => RESULT::TIE,
             };
             GameState::AcceptingSettle {
                 result,
@@ -196,14 +205,14 @@ pub fn process_action(state: GameState, action: Actions) -> GameState {
             },
             Actions::ExpireGame { player},
         ) => {
-            if clock.slot < expiry_slot {
+            if slot < expiry_slot {
                 panic!("challenge not expired yet");
             }
             if player != p2 {
                 panic!("only player 2 can expire unrevealed games");
             }
             GameState::AcceptingSettle {
-                result: Result::P2,
+                result: RESULT::P2,
                 player_1,
                 player_2: PlayerState::Revealed(p2, player_2_choice),
                 config,
@@ -227,6 +236,7 @@ mod test {
         let commitment = create_commitment(player_1_pubkey, salt, RPS::Rock);
         let player_2_pubkey = Pubkey::new_unique();
         let usdc_mint = Pubkey::new_unique();
+        let slot: Slot = 0;
 
         let state = {
             let action = Actions::CreateGame {
@@ -242,10 +252,11 @@ mod test {
                     wager_amount: 10,
                     mint: usdc_mint,
                 }, 
-                player_1: PlayerState::Committed(player_1_pubkey, commitment)
+                player_1: PlayerState::Committed(player_1_pubkey, commitment),
+                expiry_slot: 600,
             };
 
-            assert_eq!(process_action(state, action), expected);
+            assert_eq!(process_action(state, action, slot), expected);
             expected
         };
 
@@ -261,8 +272,9 @@ mod test {
                     wager_amount: 10,
                     mint: usdc_mint,
                 },
+                expiry_slot: 600,
             };
-            assert_eq!(process_action(state, action), expected);
+            assert_eq!(process_action(state, action, slot), expected);
             expected
         };
 
@@ -273,7 +285,7 @@ mod test {
                 choice: RPS::Rock
             };
             let expected = GameState::AcceptingSettle { 
-                result: Result::P2, 
+                result: RESULT::P2,
                 player_1: PlayerState::Revealed(player_1_pubkey, RPS::Rock), 
                 player_2: PlayerState::Revealed(player_2_pubkey, RPS::Paper), 
                 config: GameConfig {
@@ -281,7 +293,7 @@ mod test {
                     mint: usdc_mint,
                 }, 
             };
-            assert_eq!(process_action(state, action), expected);
+            assert_eq!(process_action(state, action, slot), expected);
             expected
         };
     }
