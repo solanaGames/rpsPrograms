@@ -62,9 +62,9 @@ pub enum PlayerState {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, AnchorSerialize, AnchorDeserialize)]
 pub struct GameConfig {
-    wager_amount: u64,
-    mint: Pubkey,
-    entry_proof: Option<[u8; 32]>,
+    pub wager_amount: u64,
+    pub mint: Pubkey,
+    pub entry_proof: Option<[u8; 32]>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, AnchorSerialize, AnchorDeserialize)]
