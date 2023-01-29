@@ -1,36 +1,23 @@
-use ring::digest::Context;
-use ring::digest::SHA256;
-use ring::digest::SHA256_OUTPUT_LEN;
-use solana_sdk::pubkey::Pubkey;
 use anchor_lang::prelude::*;
-use solana_sdk::slot_history::Slot;
+use solana_program::keccak::hashv;
 
 pub fn verify_commitment(
     pubkey: Pubkey,
-    commitment: [u8; SHA256_OUTPUT_LEN],
+    commitment: [u8; 32],
     salt: u64,
     choice: RPS,
 ) -> bool {
-    let mut context = Context::new(&SHA256);
-    context.update(pubkey.as_ref());
-    context.update(&salt.to_le_bytes());
-    context.update([choice.into()].as_ref());
-
-    let hash = context.finish();
-    hash.as_ref() == commitment
+    let hash = hashv(&[pubkey.as_ref(), &salt.to_le_bytes(), [choice.into()].as_ref()]);
+    hash.0 == commitment
 }
 
 pub fn verify_entry(
     pubkey: Pubkey,
-    entry_proof: [u8; SHA256_OUTPUT_LEN],
+    entry_proof: [u8; 32],
     secret: u64,
 ) -> bool {
-    let mut context = Context::new(&SHA256);
-    context.update(pubkey.as_ref());
-    context.update(&secret.to_le_bytes());
-
-    let hash = context.finish();
-    hash.as_ref() == entry_proof
+    let hash = hashv(&[pubkey.as_ref(), &secret.to_le_bytes()]);
+    hash.0 == entry_proof
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, AnchorSerialize, AnchorDeserialize)]
@@ -71,7 +58,7 @@ impl From<RESULT> for u8 {
 pub enum PlayerState {
     Empty,
     Waiting(Pubkey),
-    Committed(Pubkey, [u8; SHA256_OUTPUT_LEN]),
+    Committed(Pubkey, [u8; 32]),
     Revealed(Pubkey, RPS),
 }
 
@@ -79,7 +66,7 @@ pub enum PlayerState {
 pub struct GameConfig {
     wager_amount: u64,
     mint: Pubkey,
-    entry_proof: Option<[u8; SHA256_OUTPUT_LEN]>,
+    entry_proof: Option<[u8; 32]>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, AnchorSerialize, AnchorDeserialize)]
@@ -88,13 +75,13 @@ pub enum GameState {
     AcceptingChallenge {
         config: GameConfig,
         player_1: PlayerState,
-        expiry_slot: Slot,
+        expiry_slot: u64,
     },
     AcceptingReveal {
         player_1: PlayerState,
         player_2: PlayerState,
         config: GameConfig,
-        expiry_slot: Slot,
+        expiry_slot: u64,
     },
     AcceptingSettle {
         result: RESULT,
@@ -104,11 +91,11 @@ pub enum GameState {
     },
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, AnchorSerialize, AnchorDeserialize)]
 pub enum Actions {
     CreateGame {
         player_1_pubkey: Pubkey,
-        commitment: [u8; SHA256_OUTPUT_LEN],
+        commitment: [u8; 32],
         config: GameConfig,
     },
     JoinGame {
@@ -127,7 +114,7 @@ pub enum Actions {
     Settle,
 }
 
-pub fn process_action(state_pubkey: Pubkey, state: GameState, action: Actions, slot: Slot) -> GameState {
+pub fn process_action(state_pubkey: Pubkey, state: GameState, action: Actions, slot: u64) -> GameState {
     match (state, action) {
         (GameState::Initialized, Actions::CreateGame { player_1_pubkey, commitment, config }) => {
             GameState::AcceptingChallenge { 
@@ -269,7 +256,7 @@ mod test {
         let commitment = create_commitment(player_1_pubkey, salt, RPS::Rock);
         let player_2_pubkey = Pubkey::new_unique();
         let usdc_mint = Pubkey::new_unique();
-        let slot: Slot = 0;
+        let slot: u64 = 0;
 
         let state = {
             let action = Actions::CreateGame {
@@ -346,7 +333,7 @@ mod test {
         let commitment = create_commitment(player_1_pubkey, salt, RPS::Rock);
         let player_2_pubkey = Pubkey::new_unique();
         let usdc_mint = Pubkey::new_unique();
-        let slot: Slot = 0;
+        let slot: u64 = 0;
         let secret = Some(8238538u64);
         let entry_proof = Some(create_entry_proof(state_pubkey, 8238538u64));
 
@@ -415,26 +402,23 @@ mod test {
         };
     }
 
-    pub fn create_commitment(pubkey: Pubkey, salt: u64, choice: RPS) -> [u8; SHA256_OUTPUT_LEN] {
-        let mut context = Context::new(&SHA256);
-        context.update(pubkey.as_ref());
-        context.update(&salt.to_le_bytes());
-        context.update([choice.into()].as_ref());
+    pub fn create_commitment(pubkey: Pubkey, salt: u64, choice: RPS) -> [u8; 32] {
+        let hash = hashv(&[pubkey.as_ref(), &salt.to_le_bytes(), [choice.into()].as_ref()]);
+        // let mut buf = [0; 32];
+        // buf.copy_from_slice(hash.as_ref());
+        // buf
 
-        let hash = context.finish();
-        let mut buf = [0; SHA256_OUTPUT_LEN];
-        buf.copy_from_slice(hash.as_ref());
-        buf
+        // idk why but this works
+        hash.0
     }
 
-    pub fn create_entry_proof(pubkey: Pubkey, secret: u64) -> [u8; SHA256_OUTPUT_LEN] {
-        let mut context = Context::new(&SHA256);
-        context.update(pubkey.as_ref());
-        context.update(&secret.to_le_bytes());
+    pub fn create_entry_proof(pubkey: Pubkey, secret: u64) -> [u8; 32] {
+        let hash = hashv(&[pubkey.as_ref(), &secret.to_le_bytes()]);
+        // let mut buf = [0; 32];
+        // buf.copy_from_slice(hash.as_ref());
+        // buf
 
-        let hash = context.finish();
-        let mut buf = [0; SHA256_OUTPUT_LEN];
-        buf.copy_from_slice(hash.as_ref());
-        buf
+        // idk why but this works
+        hash.0
     }
 }

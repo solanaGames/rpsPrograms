@@ -21,7 +21,7 @@ pub mod rps {
     pub fn make_action(ctx: Context<MakeAction>, action: Actions) -> Result<()> {
         let pubkey = ctx.accounts.game.key();
         let clock = &Clock::get()?;
-        ctx.accounts.game.state = process_action(ctx.accounts.game.key(), ctx.accounts.game.state, action, clock.slot);
+        ctx.accounts.game.state = process_action(pubkey, ctx.accounts.game.state, action, clock.slot);
         Ok(())
     }
 

@@ -7,5 +7,4 @@ edition = "2021"
 
 [dependencies]
 anchor-lang = "0.26.0"
-ring = "0.16.20"
-solana-sdk = "1.14.13"
+solana-program = "1.13.5"
