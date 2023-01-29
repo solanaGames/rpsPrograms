@@ -1,16 +1,12 @@
 use anchor_lang::prelude::*;
-use rockpaperscissors::{
-    GameState,
-    process_action,
-    Actions,
-};
+mod logic;
+
+use logic::{process_action, Actions, GameState};
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
 #[program]
 pub mod rps {
-    use rockpaperscissors::Actions;
-
     use super::*;
 
     pub fn initialize(ctx: Context<InitializeGame>) -> Result<()> {
@@ -21,12 +17,11 @@ pub mod rps {
     pub fn make_action(ctx: Context<MakeAction>, action: Actions) -> Result<()> {
         let pubkey = ctx.accounts.game.key();
         let clock = &Clock::get()?;
-        ctx.accounts.game.state = process_action(pubkey, ctx.accounts.game.state, action, clock.slot);
+        ctx.accounts.game.state =
+            process_action(pubkey, ctx.accounts.game.state, action, clock.slot);
         Ok(())
     }
-
 }
-
 
 #[derive(Accounts)]
 pub struct InitializeGame<'info> {
@@ -45,5 +40,5 @@ pub struct MakeAction<'info> {
 
 #[account]
 pub struct Game {
-    pub state: GameState
+    pub state: GameState,
 }

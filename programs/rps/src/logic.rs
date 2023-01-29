@@ -1,21 +1,16 @@
 use anchor_lang::prelude::*;
 use solana_program::keccak::hashv;
 
-pub fn verify_commitment(
-    pubkey: Pubkey,
-    commitment: [u8; 32],
-    salt: u64,
-    choice: RPS,
-) -> bool {
-    let hash = hashv(&[pubkey.as_ref(), &salt.to_le_bytes(), [choice.into()].as_ref()]);
+pub fn verify_commitment(pubkey: Pubkey, commitment: [u8; 32], salt: u64, choice: RPS) -> bool {
+    let hash = hashv(&[
+        pubkey.as_ref(),
+        &salt.to_le_bytes(),
+        [choice.into()].as_ref(),
+    ]);
     hash.0 == commitment
 }
 
-pub fn verify_entry(
-    pubkey: Pubkey,
-    entry_proof: [u8; 32],
-    secret: u64,
-) -> bool {
+pub fn verify_entry(pubkey: Pubkey, entry_proof: [u8; 32], secret: u64) -> bool {
     let hash = hashv(&[pubkey.as_ref(), &secret.to_le_bytes()]);
     hash.0 == entry_proof
 }
@@ -53,13 +48,16 @@ impl From<RESULT> for u8 {
     }
 }
 
-
 #[derive(Debug, PartialEq, Eq, Clone, Copy, AnchorSerialize, AnchorDeserialize)]
 pub enum PlayerState {
-    Empty,
-    Waiting(Pubkey),
-    Committed(Pubkey, [u8; 32]),
-    Revealed(Pubkey, RPS),
+    Committed {
+        pubkey: Pubkey,
+        commitment: [u8; 32],
+    },
+    Revealed {
+        pubkey: Pubkey,
+        choice: RPS,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, AnchorSerialize, AnchorDeserialize)]
@@ -114,33 +112,48 @@ pub enum Actions {
     Settle,
 }
 
-pub fn process_action(state_pubkey: Pubkey, state: GameState, action: Actions, slot: u64) -> GameState {
+pub fn process_action(
+    state_pubkey: Pubkey,
+    state: GameState,
+    action: Actions,
+    slot: u64,
+) -> GameState {
     match (state, action) {
-        (GameState::Initialized, Actions::CreateGame { player_1_pubkey, commitment, config }) => {
-            GameState::AcceptingChallenge { 
-                config, 
-                player_1: PlayerState::Committed(player_1_pubkey, commitment),
-                expiry_slot: slot + 2 * 60 * 5
-            }
-        }
+        (
+            GameState::Initialized,
+            Actions::CreateGame {
+                player_1_pubkey: pubkey,
+                commitment,
+                config,
+            },
+        ) => GameState::AcceptingChallenge {
+            config,
+            player_1: PlayerState::Committed { pubkey, commitment },
+            expiry_slot: slot + 2 * 60 * 5,
+        },
 
         (
             GameState::AcceptingChallenge {
                 player_1,
-                config: GameConfig {
-                    wager_amount,
-                    mint,
-                    entry_proof,
-                },
-                expiry_slot
+                config:
+                    GameConfig {
+                        wager_amount,
+                        mint,
+                        entry_proof,
+                    },
+                expiry_slot,
             },
-            Actions::JoinGame { player_2_pubkey, choice, secret},
+            Actions::JoinGame {
+                player_2_pubkey,
+                choice,
+                secret,
+            },
         ) => {
             if slot > expiry_slot {
                 panic!("challenge expired");
             }
             if let Some(entry_proof) = entry_proof {
-                if let Some(secret) = secret{
+                if let Some(secret) = secret {
                     if !verify_entry(state_pubkey, entry_proof, secret) {
                         panic!("invalid entry secret")
                     }
@@ -150,22 +163,29 @@ pub fn process_action(state_pubkey: Pubkey, state: GameState, action: Actions, s
             }
             GameState::AcceptingReveal {
                 player_1,
-                player_2: PlayerState::Revealed(player_2_pubkey, choice),
+                player_2: PlayerState::Revealed {
+                    pubkey: player_2_pubkey,
+                    choice,
+                },
                 config: GameConfig {
                     wager_amount,
                     mint,
                     entry_proof,
                 },
-                expiry_slot: slot + 2 * 60 * 5
+                expiry_slot: slot + 2 * 60 * 5,
             }
-        },
+        }
         (
             GameState::AcceptingChallenge {
-                player_1: PlayerState::Committed(p1, player_1_commitment),
+                player_1:
+                    PlayerState::Committed {
+                        pubkey: p1,
+                        commitment: player_1_commitment,
+                    },
                 config,
-                expiry_slot
+                expiry_slot,
             },
-            Actions::ExpireGame { player},
+            Actions::ExpireGame { player },
         ) => {
             if slot < expiry_slot {
                 panic!("challenge not expired yet");
@@ -175,20 +195,38 @@ pub fn process_action(state_pubkey: Pubkey, state: GameState, action: Actions, s
             }
             GameState::AcceptingSettle {
                 result: RESULT::P1,
-                player_1: PlayerState::Committed(p1, player_1_commitment),
-                player_2: PlayerState::Committed(p1, player_1_commitment),
+                player_1: PlayerState::Committed {
+                    pubkey: p1,
+                    commitment: player_1_commitment,
+                },
+                player_2: PlayerState::Committed {
+                    pubkey: p1,
+                    commitment: player_1_commitment,
+                },
                 config,
             }
-        },
+        }
 
         (
             GameState::AcceptingReveal {
-                player_1: PlayerState::Committed(p1, player_1_commitment),
-                player_2: PlayerState::Revealed(p2, player_2_choice),
+                player_1:
+                    PlayerState::Committed {
+                        pubkey: p1,
+                        commitment: player_1_commitment,
+                    },
+                player_2:
+                    PlayerState::Revealed {
+                        pubkey: p2,
+                        choice: player_2_choice,
+                    },
                 config,
                 expiry_slot,
             },
-            Actions::Reveal { player_1_pubkey, salt, choice }
+            Actions::Reveal {
+                player_1_pubkey,
+                salt,
+                choice,
+            },
         ) => {
             if slot > expiry_slot {
                 panic!("challenge expired");
@@ -210,19 +248,26 @@ pub fn process_action(state_pubkey: Pubkey, state: GameState, action: Actions, s
             };
             GameState::AcceptingSettle {
                 result,
-                player_1: PlayerState::Revealed(p1, choice),
-                player_2: PlayerState::Revealed(p2, player_2_choice),
+                player_1: PlayerState::Revealed { pubkey: p1, choice },
+                player_2: PlayerState::Revealed {
+                    pubkey: p2,
+                    choice: player_2_choice,
+                },
                 config,
             }
         }
         (
             GameState::AcceptingReveal {
                 player_1,
-                player_2: PlayerState::Revealed(p2, player_2_choice),
+                player_2:
+                    PlayerState::Revealed {
+                        pubkey: p2,
+                        choice: player_2_choice,
+                    },
                 config,
                 expiry_slot,
             },
-            Actions::ExpireGame { player},
+            Actions::ExpireGame { player },
         ) => {
             if slot < expiry_slot {
                 panic!("challenge not expired yet");
@@ -233,10 +278,13 @@ pub fn process_action(state_pubkey: Pubkey, state: GameState, action: Actions, s
             GameState::AcceptingSettle {
                 result: RESULT::P2,
                 player_1,
-                player_2: PlayerState::Revealed(p2, player_2_choice),
+                player_2: PlayerState::Revealed {
+                    pubkey: p2,
+                    choice: player_2_choice,
+                },
                 config,
             }
-        },
+        }
 
         _ => panic!("Invalid (state, action) pair: {:#?} {:#?}", state, action),
     }
@@ -265,16 +313,19 @@ mod test {
                 config: GameConfig {
                     wager_amount: 10,
                     mint: usdc_mint,
-                    entry_proof: None, 
+                    entry_proof: None,
                 },
             };
-            let expected = GameState::AcceptingChallenge { 
+            let expected = GameState::AcceptingChallenge {
                 config: GameConfig {
                     wager_amount: 10,
                     mint: usdc_mint,
                     entry_proof: None,
-                }, 
-                player_1: PlayerState::Committed(player_1_pubkey, commitment),
+                },
+                player_1: PlayerState::Committed {
+                    pubkey: player_1_pubkey,
+                    commitment,
+                },
                 expiry_slot: 600,
             };
 
@@ -283,14 +334,20 @@ mod test {
         };
 
         let state = {
-            let action = Actions::JoinGame{
+            let action = Actions::JoinGame {
                 player_2_pubkey,
                 choice: RPS::Paper,
-                secret: None
+                secret: None,
             };
-            let expected = GameState::AcceptingReveal { 
-                player_1: PlayerState::Committed(player_1_pubkey, commitment), 
-                player_2: PlayerState::Revealed(player_2_pubkey, RPS::Paper), 
+            let expected = GameState::AcceptingReveal {
+                player_1: PlayerState::Committed {
+                    pubkey: player_1_pubkey,
+                    commitment,
+                },
+                player_2: PlayerState::Revealed {
+                    pubkey: player_2_pubkey,
+                    choice: RPS::Paper,
+                },
                 config: GameConfig {
                     wager_amount: 10,
                     mint: usdc_mint,
@@ -303,20 +360,26 @@ mod test {
         };
 
         let _state = {
-            let action = Actions::Reveal { 
-                player_1_pubkey, 
-                salt, 
-                choice: RPS::Rock
+            let action = Actions::Reveal {
+                player_1_pubkey,
+                salt,
+                choice: RPS::Rock,
             };
-            let expected = GameState::AcceptingSettle { 
+            let expected = GameState::AcceptingSettle {
                 result: RESULT::P2,
-                player_1: PlayerState::Revealed(player_1_pubkey, RPS::Rock), 
-                player_2: PlayerState::Revealed(player_2_pubkey, RPS::Paper), 
+                player_1: PlayerState::Revealed {
+                    pubkey: player_1_pubkey,
+                    choice: RPS::Rock,
+                },
+                player_2: PlayerState::Revealed {
+                    pubkey: player_2_pubkey,
+                    choice: RPS::Paper,
+                },
                 config: GameConfig {
                     wager_amount: 10,
                     mint: usdc_mint,
                     entry_proof: None,
-                }, 
+                },
             };
             assert_eq!(process_action(state_pubkey, state, action, slot), expected);
             expected
@@ -344,16 +407,19 @@ mod test {
                 config: GameConfig {
                     wager_amount: 10,
                     mint: usdc_mint,
-                    entry_proof, 
+                    entry_proof,
                 },
             };
-            let expected = GameState::AcceptingChallenge { 
+            let expected = GameState::AcceptingChallenge {
                 config: GameConfig {
                     wager_amount: 10,
                     mint: usdc_mint,
                     entry_proof,
-                }, 
-                player_1: PlayerState::Committed(player_1_pubkey, commitment),
+                },
+                player_1: PlayerState::Committed {
+                    pubkey: player_1_pubkey,
+                    commitment,
+                },
                 expiry_slot: 600,
             };
 
@@ -362,14 +428,20 @@ mod test {
         };
 
         let state = {
-            let action = Actions::JoinGame{
+            let action = Actions::JoinGame {
                 player_2_pubkey,
                 choice: RPS::Paper,
-                secret
+                secret,
             };
-            let expected = GameState::AcceptingReveal { 
-                player_1: PlayerState::Committed(player_1_pubkey, commitment), 
-                player_2: PlayerState::Revealed(player_2_pubkey, RPS::Paper), 
+            let expected = GameState::AcceptingReveal {
+                player_1: PlayerState::Committed {
+                    pubkey: player_1_pubkey,
+                    commitment,
+                },
+                player_2: PlayerState::Revealed {
+                    pubkey: player_2_pubkey,
+                    choice: RPS::Paper,
+                },
                 config: GameConfig {
                     wager_amount: 10,
                     mint: usdc_mint,
@@ -382,20 +454,26 @@ mod test {
         };
 
         let _state = {
-            let action = Actions::Reveal { 
-                player_1_pubkey, 
-                salt, 
-                choice: RPS::Rock
+            let action = Actions::Reveal {
+                player_1_pubkey,
+                salt,
+                choice: RPS::Rock,
             };
-            let expected = GameState::AcceptingSettle { 
+            let expected = GameState::AcceptingSettle {
                 result: RESULT::P2,
-                player_1: PlayerState::Revealed(player_1_pubkey, RPS::Rock), 
-                player_2: PlayerState::Revealed(player_2_pubkey, RPS::Paper), 
+                player_1: PlayerState::Revealed {
+                    pubkey: player_1_pubkey,
+                    choice: RPS::Rock,
+                },
+                player_2: PlayerState::Revealed {
+                    pubkey: player_2_pubkey,
+                    choice: RPS::Paper,
+                },
                 config: GameConfig {
                     wager_amount: 10,
                     mint: usdc_mint,
                     entry_proof,
-                }, 
+                },
             };
             assert_eq!(process_action(state_pubkey, state, action, slot), expected);
             expected
@@ -403,7 +481,11 @@ mod test {
     }
 
     pub fn create_commitment(pubkey: Pubkey, salt: u64, choice: RPS) -> [u8; 32] {
-        let hash = hashv(&[pubkey.as_ref(), &salt.to_le_bytes(), [choice.into()].as_ref()]);
+        let hash = hashv(&[
+            pubkey.as_ref(),
+            &salt.to_le_bytes(),
+            [choice.into()].as_ref(),
+        ]);
         // let mut buf = [0; 32];
         // buf.copy_from_slice(hash.as_ref());
         // buf

@@ -17,4 +17,4 @@ default = []
 
 [dependencies]
 anchor-lang = "0.26.0"
-rockpaperscissors = { path = "../../rockpaperscissors" }
+solana-program = "1.14.13"
