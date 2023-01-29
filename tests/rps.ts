@@ -1,8 +1,15 @@
 import * as anchor from "@project-serum/anchor";
-import { PublicKey, SystemProgram, Transaction, Connection, Commitment } from "@solana/web3.js";
+import {
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  Connection,
+  Commitment,
+} from "@solana/web3.js";
 import { Program } from "@project-serum/anchor";
 import { Rps } from "../target/types/rps";
 import { BN } from "bn.js";
+import keccak from "keccak256";
 import {
   TOKEN_PROGRAM_ID,
   createMint,
@@ -12,6 +19,7 @@ import {
   getAssociatedTokenAddress,
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
+import keccak256 from "keccak256";
 
 describe("rps", () => {
   // Configure the client to use the local cluster.
@@ -62,12 +70,16 @@ describe("rps", () => {
     // const acc = await getAccount(provider.connection, tokenAccount);
     // console.log("Token account ", acc);
 
-
     const [gameAuthority, _] = await PublicKey.findProgramAddress(
       [game.publicKey.toBuffer()],
       program.programId
     );
-    const escrowTokenAccount = await getAssociatedTokenAddress(mint, gameAuthority, true);
+    const escrowTokenAccount = await getAssociatedTokenAddress(
+      mint,
+      gameAuthority,
+      true
+    );
+
 
     let commitment = [];
     for (let i = 0; i < 32; i++) {
@@ -94,5 +106,58 @@ describe("rps", () => {
 
     const gameAccount = await program.account.game.fetch(game.publicKey);
     console.log("Your game account", gameAccount);
+
+    const player2 = anchor.web3.Keypair.generate();
+    await provider.connection.confirmTransaction(
+      await provider.connection.requestAirdrop(
+        player2.publicKey,
+        1000000000 * 10
+      )
+    );
+
+    const tokenAccount2 = await createAccount(
+      provider.connection,
+      player2,
+      mint,
+      player2.publicKey
+    );
+    await mintTo(
+      provider.connection,
+      player2,
+      mint,
+      tokenAccount2,
+      mintAuthority,
+      10
+    );
+
+    const tx2 = await program.methods
+      .joinGame({ paper: {} }, null)
+      .accounts({
+        player: player2.publicKey,
+        game: game.publicKey,
+        mint: mint,
+        playerTokenAccount: tokenAccount2,
+        gameAuthority: gameAuthority,
+        escrowTokenAccount: escrowTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([player2])
+      .rpc({ skipPreflight: true });
+    console.log("Your transaction signature", tx);
+
+    const gameAccount2 = await program.account.game.fetch(game.publicKey);
+    console.log("Your game account", gameAccount2);
+
+    const tx3 = await program.methods
+      .revealGame({ paper: {} }, new BN(4))
+      .accounts({
+        player: player.publicKey,
+        game: game.publicKey,
+      })
+      .signers([player])
+      .rpc({ skipPreflight: true });
+
+    const gameAccount3 = await program.account.game.fetch(game.publicKey);
+    console.log("Your game account", gameAccount3);
   });
 });
