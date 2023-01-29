@@ -3,6 +3,8 @@ use ring::digest::SHA256;
 use ring::digest::SHA256_OUTPUT_LEN;
 use solana_sdk::pubkey::Pubkey;
 use anchor_lang::prelude::*;
+use solana_sdk::slot_history::Slot;
+use solana_sdk::sysvar::clock;
 
 pub fn verify_commitment(
     pubkey: Pubkey,
@@ -26,6 +28,12 @@ pub enum RPS {
     Scissors,
 }
 
+pub enum Result {
+    P1,
+    P2,
+    TIE,
+}
+
 impl From<RPS> for u8 {
     fn from(rps: RPS) -> Self {
         match rps {
@@ -40,10 +48,7 @@ impl From<RPS> for u8 {
 pub enum PlayerState {
     Empty,
     Waiting(Pubkey),
-    Committed {
-        pubkey: Pubkey,
-        commitment: [u8; SHA256_OUTPUT_LEN],
-    },
+    Committed(Pubkey, [u8; SHA256_OUTPUT_LEN]),
     Revealed(Pubkey, RPS),
 }
 
@@ -56,28 +61,19 @@ pub struct GameConfig {
 #[derive(Debug, PartialEq, Eq, Clone, Copy, AnchorSerialize, AnchorDeserialize)]
 pub enum GameState {
     Initialized,
-    Pending {
-        player: Pubkey,
+    AcceptingChallenge {
         config: GameConfig,
+        player_1: PlayerState,
+        expiry_slot: Slot,
     },
-    AcceptingCommitments {
+    AcceptingReveal {
         player_1: PlayerState,
         player_2: PlayerState,
         config: GameConfig,
+        expiry_slot: Slot,
     },
-    AcceptingReveals {
-        player_1: PlayerState,
-        player_2: PlayerState,
-        config: GameConfig,
-    },
-    Done {
-        winner: Option<Pubkey>,
-        player_1: PlayerState,
-        player_2: PlayerState,
-        config: GameConfig,
-    },
-    Settled {
-        winner: Option<Pubkey>,
+    AcceptingSettle {
+        result: Result,
         player_1: PlayerState,
         player_2: PlayerState,
         config: GameConfig,
@@ -87,178 +83,131 @@ pub enum GameState {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Actions {
     CreateGame {
-        player: Pubkey,
+        player_1_pubkey: Pubkey,
+        commitment: [u8; SHA256_OUTPUT_LEN],
         config: GameConfig,
     },
     JoinGame {
-        player: Pubkey,
-    },
-    Commit {
-        player: Pubkey,
-        commitment: [u8; SHA256_OUTPUT_LEN],
+        player_2_pubkey: Pubkey,
+        choice: RPS,
     },
     Reveal {
-        player: Pubkey,
+        player_1_pubkey: Pubkey,
         salt: u64,
         choice: RPS,
+    },
+    ExpireGame {
+        player: Pubkey,
     },
     Settle,
 }
 
 pub fn process_action(state: GameState, action: Actions) -> GameState {
+    let clock = &Clock::get()?;
     match (state, action) {
-        (GameState::Initialized, Actions::CreateGame { player, config }) => {
-            GameState::Pending { player, config }
+        (GameState::Initialized, Actions::CreateGame { player_1_pubkey, commitment, config }) => {
+            GameState::AcceptingChallenge { 
+                config, 
+                player_1: PlayerState::Committed(player_1_pubkey, commitment),
+                expiry_slot: clock.slot + 2 * 60 * 5
+            }
         }
 
         (
-            GameState::Pending {
-                player: player_1,
+            GameState::AcceptingChallenge {
+                player_1,
                 config,
+                expiry_slot
             },
-            Actions::JoinGame { player: player_2 },
-        ) => GameState::AcceptingCommitments {
-            player_1: PlayerState::Waiting(player_1),
-            player_2: PlayerState::Waiting(player_2),
-            config,
+            Actions::JoinGame { player_2_pubkey, choice },
+        ) => {
+            if clock.slot > expiry_slot {
+                panic!("challenge expired");
+            }
+            GameState::AcceptingReveal {
+                player_1,
+                player_2: PlayerState::Revealed(player_2_pubkey, choice),
+                config,
+                expiry_slot: clock.slot + 2 * 60 * 5
+            }
+        },
+        (
+            GameState::AcceptingChallenge {
+                player_1: PlayerState::Committed(p1, player_1_commitment),
+                config,
+                expiry_slot
+            },
+            Actions::ExpireGame { player},
+        ) => {
+            if clock.slot < expiry_slot {
+                panic!("challenge not expired yet");
+            }
+            if player != p1 {
+                panic!("only player 1 can expire unmatched games");
+            }
+            GameState::AcceptingSettle {
+                result: Result::P1,
+                player_1: PlayerState::Committed(p1, player_1_commitment),
+                player_2: PlayerState::Committed(p1, player_1_commitment),
+                config,
+            }
         },
 
         (
-            GameState::AcceptingCommitments {
-                player_1,
-                player_2,
+            GameState::AcceptingReveal {
+                player_1: PlayerState::Committed(p1, player_1_commitment),
+                player_2: PlayerState::Revealed(p2, player_2_choice),
                 config,
+                expiry_slot,
             },
-            Actions::Commit { player, commitment },
+            Actions::Reveal { player_1_pubkey, salt, choice }
         ) => {
-            let new_state = match (player_1, player_2) {
-                (PlayerState::Waiting(player_1), player_2) if player == player_1 => {
-                    GameState::AcceptingCommitments {
-                        player_1: PlayerState::Committed {
-                            pubkey: player_1,
-                            commitment,
-                        },
-                        player_2,
-                        config,
-                    }
-                }
-                (player_1, PlayerState::Waiting(player_2)) if player == player_2 => {
-                    GameState::AcceptingCommitments {
-                        player_1,
-                        player_2: PlayerState::Committed {
-                            pubkey: player_2,
-                            commitment,
-                        },
-                        config,
-                    }
-                }
-                _ => panic!("Unreachable state"),
+            if clock.slot > expiry_slot {
+                panic!("challenge expired");
+            }
+            if p1 != player_1_pubkey {
+                panic!("player1 must reveal");
+            }
+            if !verify_commitment(player_1_pubkey, player_1_commitment, salt, choice){
+                panic!("Invalid commitment");
+            }
+            let result = match (choice, player_2_choice) {
+                (RPS::Rock, RPS::Scissors) => Result::P1,
+                (RPS::Paper, RPS::Rock) => Result::P1,
+                (RPS::Scissors, RPS::Paper) => Result::P1,
+                (RPS::Rock, RPS::Paper) => Result::P2,
+                (RPS::Paper, RPS::Scissors) => Result::P2,
+                (RPS::Scissors, RPS::Rock) => Result::P2,
+                _ => Result::TIE,
             };
-
-            match new_state {
-                GameState::AcceptingCommitments {
-                    player_1: p1 @ PlayerState::Committed { .. },
-                    player_2: p2 @ PlayerState::Committed { .. },
-                    config,
-                } => GameState::AcceptingReveals {
-                    player_1: p1,
-                    player_2: p2,
-                    config,
-                },
-                _ => new_state,
+            GameState::AcceptingSettle {
+                result,
+                player_1: PlayerState::Revealed(p1, choice),
+                player_2: PlayerState::Revealed(p2, player_2_choice),
+                config,
             }
         }
-
         (
-            GameState::AcceptingReveals {
+            GameState::AcceptingReveal {
                 player_1,
-                player_2,
+                player_2: PlayerState::Revealed(p2, player_2_choice),
                 config,
+                expiry_slot,
             },
-            Actions::Reveal {
-                player,
-                salt,
-                choice,
-            },
+            Actions::ExpireGame { player},
         ) => {
-            let new_state = match (player_1, player_2) {
-                (
-                    PlayerState::Committed {
-                        pubkey: player_1,
-                        commitment,
-                    },
-                    player_2,
-                ) if player == player_1 => {
-                    if !verify_commitment(player_1, commitment, salt, choice) {
-                        panic!("Invalid commitment");
-                    }
-
-                    GameState::AcceptingReveals {
-                        player_1: PlayerState::Revealed(player_1, choice),
-                        player_2,
-                        config,
-                    }
-                }
-                (
-                    player_1,
-                    PlayerState::Committed {
-                        pubkey: player_2,
-                        commitment,
-                    },
-                ) if player == player_2 => {
-                    if !verify_commitment(player_2, commitment, salt, choice) {
-                        panic!("Invalid commitment");
-                    }
-
-                    GameState::AcceptingReveals {
-                        player_1,
-                        player_2: PlayerState::Revealed(player_2, choice),
-                        config,
-                    }
-                }
-                _ => panic!("Unreachable state"),
-            };
-
-            match new_state {
-                GameState::AcceptingReveals {
-                    player_1: PlayerState::Revealed(p1, c1),
-                    player_2: PlayerState::Revealed(p2, c2),
-                    config,
-                } => {
-                    let winner = match (c1, c2) {
-                        (RPS::Rock, RPS::Scissors) => Some(p1),
-                        (RPS::Paper, RPS::Rock) => Some(p1),
-                        (RPS::Scissors, RPS::Paper) => Some(p1),
-                        (RPS::Rock, RPS::Paper) => Some(p2),
-                        (RPS::Paper, RPS::Scissors) => Some(p2),
-                        (RPS::Scissors, RPS::Rock) => Some(p2),
-                        _ => None,
-                    };
-
-                    GameState::Done {
-                        winner,
-                        player_1: PlayerState::Revealed(p1, c1),
-                        player_2: PlayerState::Revealed(p2, c2),
-                        config,
-                    }
-                }
-                _ => new_state,
+            if clock.slot < expiry_slot {
+                panic!("challenge not expired yet");
             }
-        }
-
-        (
-            GameState::Done {
-                winner,
+            if player != p2 {
+                panic!("only player 2 can expire unrevealed games");
+            }
+            GameState::AcceptingSettle {
+                result: Result::P2,
                 player_1,
-                player_2,
+                player_2: PlayerState::Revealed(p2, player_2_choice),
                 config,
-            },
-            Actions::Settle,
-        ) => GameState::Settled {
-            winner,
-            player_1,
-            player_2,
-            config,
+            }
         },
 
         _ => panic!("Invalid (state, action) pair: {:#?} {:#?}", state, action),
@@ -273,24 +222,27 @@ mod test {
     fn test_process_action() {
         let state = GameState::Initialized;
 
-        let player_1 = Pubkey::new_unique();
-        let player_2 = Pubkey::new_unique();
+        let player_1_pubkey = Pubkey::new_unique();
+        let salt = 36;
+        let commitment = create_commitment(player_1_pubkey, salt, RPS::Rock);
+        let player_2_pubkey = Pubkey::new_unique();
         let usdc_mint = Pubkey::new_unique();
 
         let state = {
             let action = Actions::CreateGame {
-                player: player_1,
+                player_1_pubkey,
+                commitment,
                 config: GameConfig {
                     wager_amount: 10,
                     mint: usdc_mint,
                 },
             };
-            let expected = GameState::Pending {
-                player: player_1,
+            let expected = GameState::AcceptingChallenge { 
                 config: GameConfig {
                     wager_amount: 10,
                     mint: usdc_mint,
-                },
+                }, 
+                player_1: PlayerState::Committed(player_1_pubkey, commitment)
             };
 
             assert_eq!(process_action(state, action), expected);
@@ -298,121 +250,37 @@ mod test {
         };
 
         let state = {
-            let action = Actions::JoinGame { player: player_2 };
-            let expected = GameState::AcceptingCommitments {
-                player_1: PlayerState::Waiting(player_1),
-                player_2: PlayerState::Waiting(player_2),
-                config: GameConfig {
-                    wager_amount: 10,
-                    mint: usdc_mint,
-                },
-            };
-
-            assert_eq!(process_action(state, action), expected);
-            expected
-        };
-
-        let commitment_1 = create_commitment(player_1, 36, RPS::Rock);
-        let state = {
-            let action = Actions::Commit {
-                player: player_1,
-                commitment: commitment_1,
-            };
-            let expected = GameState::AcceptingCommitments {
-                player_1: PlayerState::Committed {
-                    pubkey: player_1,
-                    commitment: commitment_1,
-                },
-                player_2: PlayerState::Waiting(player_2),
-                config: GameConfig {
-                    wager_amount: 10,
-                    mint: usdc_mint,
-                },
-            };
-
-            assert_eq!(process_action(state, action), expected);
-            expected
-        };
-
-        let commitment_2 = create_commitment(player_2, 48, RPS::Paper);
-        let state = {
-            let action = Actions::Commit {
-                player: player_2,
-                commitment: commitment_2,
-            };
-            let expected = GameState::AcceptingReveals {
-                player_1: PlayerState::Committed {
-                    pubkey: player_1,
-                    commitment: commitment_1,
-                },
-                player_2: PlayerState::Committed {
-                    pubkey: player_2,
-                    commitment: commitment_2,
-                },
-                config: GameConfig {
-                    wager_amount: 10,
-                    mint: usdc_mint,
-                },
-            };
-
-            assert_eq!(process_action(state, action), expected);
-            expected
-        };
-
-        let state = {
-            let action = Actions::Reveal {
-                player: player_1,
-                salt: 36,
-                choice: RPS::Rock,
-            };
-            let expected = GameState::AcceptingReveals {
-                player_1: PlayerState::Revealed(player_1, RPS::Rock),
-                player_2: PlayerState::Committed {
-                    pubkey: player_2,
-                    commitment: commitment_2,
-                },
-                config: GameConfig {
-                    wager_amount: 10,
-                    mint: usdc_mint,
-                },
-            };
-
-            assert_eq!(process_action(state, action), expected);
-            expected
-        };
-
-        let state = {
-            let action = Actions::Reveal {
-                player: player_2,
-                salt: 48,
+            let action = Actions::JoinGame{
+                player_2_pubkey,
                 choice: RPS::Paper,
             };
-            let expected = GameState::Done {
-                winner: Some(player_2),
-                player_1: PlayerState::Revealed(player_1, RPS::Rock),
-                player_2: PlayerState::Revealed(player_2, RPS::Paper),
+            let expected = GameState::AcceptingReveal { 
+                player_1: PlayerState::Committed(player_1_pubkey, commitment), 
+                player_2: PlayerState::Revealed(player_2_pubkey, RPS::Paper), 
                 config: GameConfig {
                     wager_amount: 10,
                     mint: usdc_mint,
                 },
             };
-
             assert_eq!(process_action(state, action), expected);
             expected
         };
 
-        {
-            let action = Actions::Settle;
-            let expected = GameState::Settled {
-                winner: Some(player_2),
-                player_1: PlayerState::Revealed(player_1, RPS::Rock),
-                player_2: PlayerState::Revealed(player_2, RPS::Paper),
+        let _state = {
+            let action = Actions::Reveal { 
+                player_1_pubkey, 
+                salt, 
+                choice: RPS::Rock
+            };
+            let expected = GameState::AcceptingSettle { 
+                result: Result::P2, 
+                player_1: PlayerState::Revealed(player_1_pubkey, RPS::Rock), 
+                player_2: PlayerState::Revealed(player_2_pubkey, RPS::Paper), 
                 config: GameConfig {
                     wager_amount: 10,
                     mint: usdc_mint,
-                },
+                }, 
             };
-
             assert_eq!(process_action(state, action), expected);
             expected
         };
