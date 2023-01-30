@@ -9,7 +9,7 @@
         "@solana/web3.js": "^1.73.0",
         "bn": "^1.0.5",
         "bn.js": "^5.2.1",
-        "keccak256": "^1.0.6"
+        "js-sha3": "^0.8.0"
     },
     "devDependencies": {
         "@types/bn.js": "^5.1.0",

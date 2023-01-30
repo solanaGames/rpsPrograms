@@ -2,11 +2,13 @@ use anchor_lang::prelude::*;
 use solana_program::keccak::hashv;
 
 pub fn verify_commitment(pubkey: Pubkey, commitment: [u8; 32], salt: u64, choice: RPS) -> bool {
-    let hash = hashv(&[
+    let choice8: u8 = choice.into();
+    let buffer = &[
         pubkey.as_ref(),
         &salt.to_le_bytes(),
-        [choice.into()].as_ref(),
-    ]);
+        &choice8.to_le_bytes(),
+    ];
+    let hash = hashv(buffer);
     hash.0 == commitment
 }
 
@@ -126,11 +128,14 @@ pub fn process_action(
                 commitment,
                 config,
             },
-        ) => GameState::AcceptingChallenge {
-            config,
-            player_1: PlayerState::Committed { pubkey, commitment },
-            expiry_slot: slot + 2 * 60 * 5,
-        },
+        ) => {
+            msg!("{:?}", commitment);
+            GameState::AcceptingChallenge {
+                config,
+                player_1: PlayerState::Committed { pubkey, commitment },
+                expiry_slot: slot + 2 * 60 * 5,
+            }
+        }
 
         (
             GameState::AcceptingChallenge {

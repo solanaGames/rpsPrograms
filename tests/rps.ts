@@ -9,7 +9,8 @@ import {
 import { Program } from "@project-serum/anchor";
 import { Rps } from "../target/types/rps";
 import { BN } from "bn.js";
-import keccak from "keccak256";
+import { keccak_256 } from "js-sha3";
+
 import {
   TOKEN_PROGRAM_ID,
   createMint,
@@ -19,7 +20,6 @@ import {
   getAssociatedTokenAddress,
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import keccak256 from "keccak256";
 
 describe("rps", () => {
   // Configure the client to use the local cluster.
@@ -36,6 +36,8 @@ describe("rps", () => {
     const player = anchor.web3.Keypair.generate();
     const game = anchor.web3.Keypair.generate();
     const provider = anchor.getProvider();
+    const salt = Math.floor(Math.random() * 10000000);
+    const player1Choice = 1;
 
     await provider.connection.confirmTransaction(
       await provider.connection.requestAirdrop(
@@ -80,14 +82,15 @@ describe("rps", () => {
       true
     );
 
-
-    let commitment = [];
-    for (let i = 0; i < 32; i++) {
-      commitment.push(0);
-    }
+    const buf = Buffer.concat([
+      player.publicKey.toBuffer(),
+      new anchor.BN(salt).toArrayLike(Buffer, "le", 8),
+      new anchor.BN(player1Choice).toArrayLike(Buffer, "le", 1),
+    ]);
+    let commitment = Buffer.from(keccak_256(buf), "hex");
 
     const tx = await program.methods
-      .createGame(commitment, new BN(10))
+      .createGame(commitment.toJSON().data, new BN(10))
       .accounts({
         game: game.publicKey,
         player: player.publicKey,
@@ -149,7 +152,7 @@ describe("rps", () => {
     console.log("Your game account", gameAccount2);
 
     const tx3 = await program.methods
-      .revealGame({ paper: {} }, new BN(4))
+      .revealGame({ paper: {} }, new BN(salt))
       .accounts({
         player: player.publicKey,
         game: game.publicKey,
