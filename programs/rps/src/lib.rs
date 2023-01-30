@@ -142,6 +142,19 @@ pub mod rps {
 
         Ok(())
     }
+
+    pub fn expire_game(ctx: Context<ExpireGame>) -> Result<()> {
+        let action = Actions::ExpireGame { player_pubkey: ctx.accounts.player.key() };
+
+        ctx.accounts.game.state = process_action(
+            ctx.accounts.game.key(),
+            ctx.accounts.game.state,
+            action,
+            Clock::get()?.slot,
+        );
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -195,6 +208,15 @@ pub struct JoinGame<'info> {
 
 #[derive(Accounts)]
 pub struct RevealGame<'info> {
+    #[account(mut)]
+    pub game: Account<'info, Game>,
+
+    #[account(mut)]
+    pub player: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct ExpireGame<'info> {
     #[account(mut)]
     pub game: Account<'info, Game>,
 

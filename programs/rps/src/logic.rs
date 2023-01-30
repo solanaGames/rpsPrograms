@@ -109,7 +109,7 @@ pub enum Actions {
         choice: RPS,
     },
     ExpireGame {
-        player: Pubkey,
+        player_pubkey: Pubkey,
     },
     Settle,
 }
@@ -190,12 +190,12 @@ pub fn process_action(
                 config,
                 expiry_slot,
             },
-            Actions::ExpireGame { player },
+            Actions::ExpireGame { player_pubkey },
         ) => {
             if slot < expiry_slot {
                 panic!("challenge not expired yet");
             }
-            if player != p1 {
+            if player_pubkey != p1 {
                 panic!("only player 1 can expire unmatched games");
             }
             GameState::AcceptingSettle {
@@ -272,12 +272,12 @@ pub fn process_action(
                 config,
                 expiry_slot,
             },
-            Actions::ExpireGame { player },
+            Actions::ExpireGame { player_pubkey },
         ) => {
             if slot < expiry_slot {
                 panic!("challenge not expired yet");
             }
-            if player != p2 {
+            if player_pubkey != p2 {
                 panic!("only player 2 can expire unrevealed games");
             }
             GameState::AcceptingSettle {
