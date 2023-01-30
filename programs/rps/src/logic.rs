@@ -3,11 +3,7 @@ use solana_program::keccak::hashv;
 
 pub fn verify_commitment(pubkey: Pubkey, commitment: [u8; 32], salt: u64, choice: RPS) -> bool {
     let choice8: u8 = choice.into();
-    let buffer = &[
-        pubkey.as_ref(),
-        &salt.to_le_bytes(),
-        &choice8.to_le_bytes(),
-    ];
+    let buffer = &[pubkey.as_ref(), &salt.to_le_bytes(), &choice8.to_le_bytes()];
     let hash = hashv(buffer);
     hash.0 == commitment
 }
@@ -35,17 +31,17 @@ impl From<RPS> for u8 {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, AnchorSerialize, AnchorDeserialize)]
-pub enum RESULT {
+pub enum Winner {
     P1,
     P2,
     TIE,
 }
-impl From<RESULT> for u8 {
-    fn from(result: RESULT) -> Self {
+impl From<Winner> for u8 {
+    fn from(result: Winner) -> Self {
         match result {
-            RESULT::P1 => 0,
-            RESULT::P2 => 1,
-            RESULT::TIE => 2,
+            Winner::P1 => 0,
+            Winner::P2 => 1,
+            Winner::TIE => 2,
         }
     }
 }
@@ -84,7 +80,13 @@ pub enum GameState {
         expiry_slot: u64,
     },
     AcceptingSettle {
-        result: RESULT,
+        result: Winner,
+        player_1: PlayerState,
+        player_2: PlayerState,
+        config: GameConfig,
+    },
+    Settled {
+        result: Winner,
         player_1: PlayerState,
         player_2: PlayerState,
         config: GameConfig,
@@ -199,7 +201,7 @@ pub fn process_action(
                 panic!("only player 1 can expire unmatched games");
             }
             GameState::AcceptingSettle {
-                result: RESULT::P1,
+                result: Winner::P1,
                 player_1: PlayerState::Committed {
                     pubkey: p1,
                     commitment: player_1_commitment,
@@ -243,13 +245,13 @@ pub fn process_action(
                 panic!("Invalid commitment");
             }
             let result = match (choice, player_2_choice) {
-                (RPS::Rock, RPS::Scissors) => RESULT::P1,
-                (RPS::Paper, RPS::Rock) => RESULT::P1,
-                (RPS::Scissors, RPS::Paper) => RESULT::P1,
-                (RPS::Rock, RPS::Paper) => RESULT::P2,
-                (RPS::Paper, RPS::Scissors) => RESULT::P2,
-                (RPS::Scissors, RPS::Rock) => RESULT::P2,
-                _ => RESULT::TIE,
+                (RPS::Rock, RPS::Scissors) => Winner::P1,
+                (RPS::Paper, RPS::Rock) => Winner::P1,
+                (RPS::Scissors, RPS::Paper) => Winner::P1,
+                (RPS::Rock, RPS::Paper) => Winner::P2,
+                (RPS::Paper, RPS::Scissors) => Winner::P2,
+                (RPS::Scissors, RPS::Rock) => Winner::P2,
+                _ => Winner::TIE,
             };
             GameState::AcceptingSettle {
                 result,
@@ -281,7 +283,7 @@ pub fn process_action(
                 panic!("only player 2 can expire unrevealed games");
             }
             GameState::AcceptingSettle {
-                result: RESULT::P2,
+                result: Winner::P2,
                 player_1,
                 player_2: PlayerState::Revealed {
                     pubkey: p2,
@@ -290,6 +292,21 @@ pub fn process_action(
                 config,
             }
         }
+
+        (
+            GameState::AcceptingSettle {
+                result,
+                player_1: p1 @ PlayerState::Revealed { .. },
+                player_2: p2 @ PlayerState::Revealed { .. },
+                config,
+            },
+            Actions::Settle,
+        ) => GameState::Settled {
+            result,
+            player_1: p1,
+            player_2: p2,
+            config,
+        },
 
         _ => panic!("Invalid (state, action) pair: {:#?} {:#?}", state, action),
     }
@@ -364,14 +381,36 @@ mod test {
             expected
         };
 
-        let _state = {
+        let state = {
             let action = Actions::Reveal {
                 player_1_pubkey,
                 salt,
                 choice: RPS::Rock,
             };
             let expected = GameState::AcceptingSettle {
-                result: RESULT::P2,
+                result: Winner::P2,
+                player_1: PlayerState::Revealed {
+                    pubkey: player_1_pubkey,
+                    choice: RPS::Rock,
+                },
+                player_2: PlayerState::Revealed {
+                    pubkey: player_2_pubkey,
+                    choice: RPS::Paper,
+                },
+                config: GameConfig {
+                    wager_amount: 10,
+                    mint: usdc_mint,
+                    entry_proof: None,
+                },
+            };
+            assert_eq!(process_action(state_pubkey, state, action, slot), expected);
+            expected
+        };
+
+        let _state = {
+            let action = Actions::Settle;
+            let expected = GameState::Settled {
+                result: Winner::P2,
                 player_1: PlayerState::Revealed {
                     pubkey: player_1_pubkey,
                     choice: RPS::Rock,
@@ -465,7 +504,7 @@ mod test {
                 choice: RPS::Rock,
             };
             let expected = GameState::AcceptingSettle {
-                result: RESULT::P2,
+                result: Winner::P2,
                 player_1: PlayerState::Revealed {
                     pubkey: player_1_pubkey,
                     choice: RPS::Rock,

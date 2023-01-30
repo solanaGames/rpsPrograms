@@ -6,7 +6,7 @@ use anchor_spl::{
 };
 use spl_associated_token_account::instruction::create_associated_token_account;
 
-use logic::{process_action, Actions, GameConfig, GameState, RPS};
+use logic::{process_action, Actions, GameConfig, GameState, Winner, RPS};
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
@@ -145,13 +145,57 @@ pub mod rps {
 
     pub fn expire_game(ctx: Context<ExpireGame>) -> Result<()> {
         let action = Actions::ExpireGame { player_pubkey: ctx.accounts.player.key() };
-
         ctx.accounts.game.state = process_action(
             ctx.accounts.game.key(),
             ctx.accounts.game.state,
             action,
             Clock::get()?.slot,
         );
+        Ok(())
+    }
+
+    pub fn settle_game(ctx: Context<SettleGame>) -> Result<()> {
+        let action = Actions::Settle;
+        ctx.accounts.game.state = process_action(
+            ctx.accounts.game.key(),
+            ctx.accounts.game.state,
+            action,
+            Clock::get()?.slot,
+        );
+
+        match ctx.accounts.game.state {
+            GameState::Settled {
+                result,
+                player_1,
+                player_2,
+                config,
+            } => match result {
+                Winner::P1 => {
+                    solana_program::program::invoke_signed(
+                        &spl_token::instruction::transfer(
+                            &ctx.accounts.token_program.key(),
+                            &ctx.accounts.escrow_token_account.key(),
+                            &ctx.accounts.player1_token_account.key(),
+                            &ctx.accounts.game_authority.key(),
+                            &[],
+                            config.wager_amount * 2,
+                        )?,
+                        &[
+                            ctx.accounts.token_program.to_account_info(),
+                            ctx.accounts.escrow_token_account.to_account_info(),
+                            ctx.accounts.player1_token_account.to_account_info(),
+                            ctx.accounts.game_authority.to_account_info(),
+                        ],
+                        &[&[
+                            ctx.accounts.game.key().as_ref(),
+                            &[*ctx.bumps.get("game_authority").unwrap()],
+                        ]],
+                    )?;
+                }
+                _ => unimplemented!(),
+            },
+            _ => panic!("Invalid state"),
+        };
 
         Ok(())
     }
@@ -222,6 +266,28 @@ pub struct ExpireGame<'info> {
 
     #[account(mut)]
     pub player: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct SettleGame<'info> {
+    #[account(mut)]
+    pub game: Account<'info, Game>,
+
+    pub mint: Account<'info, Mint>,
+
+    #[account(mut)]
+    pub player1_token_account: Account<'info, TokenAccount>,
+    pub player2_token_account: Account<'info, TokenAccount>,
+
+    /// CHECK: this is a pda that manages the escrow account
+    #[account(mut, seeds = [game.key().as_ref()], bump)]
+    pub game_authority: AccountInfo<'info>,
+
+    /// CHECK: this is being create in this call
+    #[account(mut, address = get_associated_token_address(&game_authority.key(), &mint.key()))]
+    pub escrow_token_account: AccountInfo<'info>,
+
+    pub token_program: Program<'info, Token>,
 }
 
 #[account]

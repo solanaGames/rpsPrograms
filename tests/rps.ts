@@ -134,7 +134,7 @@ describe("rps", () => {
     );
 
     const tx2 = await program.methods
-      .joinGame({ paper: {} }, null)
+      .joinGame({ rock: {} }, null)
       .accounts({
         player: player2.publicKey,
         game: game.publicKey,
@@ -162,5 +162,24 @@ describe("rps", () => {
 
     const gameAccount3 = await program.account.game.fetch(game.publicKey);
     console.log("Your game account", gameAccount3);
+
+    const tx4 = await program.methods
+      .settleGame()
+      .accounts({
+        game: game.publicKey,
+        mint: mint,
+        player1TokenAccount: tokenAccount,
+        player2TokenAccount: tokenAccount2,
+        gameAuthority: gameAuthority,
+        escrowTokenAccount: escrowTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+
+    const gameAccount4 = await program.account.game.fetch(game.publicKey);
+    console.log("Your game account", JSON.stringify(gameAccount4));
+
+    const acc = await getAccount(provider.connection, tokenAccount);
+    console.log("Token account amount", acc.amount);
   });
 });
