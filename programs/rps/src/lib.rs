@@ -144,7 +144,9 @@ pub mod rps {
     }
 
     pub fn expire_game(ctx: Context<ExpireGame>) -> Result<()> {
-        let action = Actions::ExpireGame { player_pubkey: ctx.accounts.player.key() };
+        let action = Actions::ExpireGame {
+            player_pubkey: ctx.accounts.player.key(),
+        };
         ctx.accounts.game.state = process_action(
             ctx.accounts.game.key(),
             ctx.accounts.game.state,
@@ -192,7 +194,70 @@ pub mod rps {
                         ]],
                     )?;
                 }
-                _ => unimplemented!(),
+                Winner::P2 => {
+                    solana_program::program::invoke_signed(
+                        &spl_token::instruction::transfer(
+                            &ctx.accounts.token_program.key(),
+                            &ctx.accounts.escrow_token_account.key(),
+                            &ctx.accounts.player2_token_account.key(),
+                            &ctx.accounts.game_authority.key(),
+                            &[],
+                            config.wager_amount * 2,
+                        )?,
+                        &[
+                            ctx.accounts.token_program.to_account_info(),
+                            ctx.accounts.escrow_token_account.to_account_info(),
+                            ctx.accounts.player2_token_account.to_account_info(),
+                            ctx.accounts.game_authority.to_account_info(),
+                        ],
+                        &[&[
+                            ctx.accounts.game.key().as_ref(),
+                            &[*ctx.bumps.get("game_authority").unwrap()],
+                        ]],
+                    )?;
+                }
+                Winner::TIE => {
+                    solana_program::program::invoke_signed(
+                        &spl_token::instruction::transfer(
+                            &ctx.accounts.token_program.key(),
+                            &ctx.accounts.escrow_token_account.key(),
+                            &ctx.accounts.player1_token_account.key(),
+                            &ctx.accounts.game_authority.key(),
+                            &[],
+                            config.wager_amount,
+                        )?,
+                        &[
+                            ctx.accounts.token_program.to_account_info(),
+                            ctx.accounts.escrow_token_account.to_account_info(),
+                            ctx.accounts.player1_token_account.to_account_info(),
+                            ctx.accounts.game_authority.to_account_info(),
+                        ],
+                        &[&[
+                            ctx.accounts.game.key().as_ref(),
+                            &[*ctx.bumps.get("game_authority").unwrap()],
+                        ]],
+                    )?;
+                    solana_program::program::invoke_signed(
+                        &spl_token::instruction::transfer(
+                            &ctx.accounts.token_program.key(),
+                            &ctx.accounts.escrow_token_account.key(),
+                            &ctx.accounts.player2_token_account.key(),
+                            &ctx.accounts.game_authority.key(),
+                            &[],
+                            config.wager_amount,
+                        )?,
+                        &[
+                            ctx.accounts.token_program.to_account_info(),
+                            ctx.accounts.escrow_token_account.to_account_info(),
+                            ctx.accounts.player2_token_account.to_account_info(),
+                            ctx.accounts.game_authority.to_account_info(),
+                        ],
+                        &[&[
+                            ctx.accounts.game.key().as_ref(),
+                            &[*ctx.bumps.get("game_authority").unwrap()],
+                        ]],
+                    )?;
+                }
             },
             _ => panic!("Invalid state"),
         };
