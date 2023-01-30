@@ -264,6 +264,35 @@ pub mod rps {
 
         Ok(())
     }
+
+    pub fn clean_game(ctx: Context<CleanGame>) -> Result<()> {
+        // check only designated closer can close
+        match ctx.accounts.game.state {
+            GameState::Settled { result: _, player_1: _, player_2: _, config: _} => {
+                solana_program::program::invoke_signed(
+                    &spl_token::instruction::close_account(
+                        &ctx.accounts.token_program.key(), 
+                        &ctx.accounts.escrow_token_account.key(),
+                        &ctx.accounts.cleaner.key(),
+                        &ctx.accounts.game_authority.key(),
+                        &[]
+                    )?,
+                    &[
+                        ctx.accounts.token_program.to_account_info(), 
+                        ctx.accounts.escrow_token_account.to_account_info(),
+                        ctx.accounts.cleaner.to_account_info(),
+                        ctx.accounts.game_authority.to_account_info(),
+                    ],
+                    &[&[
+                        ctx.accounts.game.key().as_ref(),
+                        &[*ctx.bumps.get("game_authority").unwrap()],
+                    ]],
+                )?;
+            }
+            _ => {panic!("game not settled can't clean")}
+        }
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -338,6 +367,7 @@ pub struct SettleGame<'info> {
     #[account(mut)]
     pub game: Account<'info, Game>,
 
+    // i dont think you actually need this you can just do game.state.mint in the ata check below in fact that is prob better
     pub mint: Account<'info, Mint>,
 
     #[account(mut)]
@@ -351,6 +381,27 @@ pub struct SettleGame<'info> {
     /// CHECK: this is being create in this call
     #[account(mut, address = get_associated_token_address(&game_authority.key(), &mint.key()))]
     pub escrow_token_account: AccountInfo<'info>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct CleanGame<'info> {
+    #[account(mut, close = cleaner)]
+    pub game: Account<'info, Game>,
+
+    // i dont think you actually need this you can just do game.state.mint in the ata check below in fact that is prob better
+    pub mint: Account<'info, Mint>,
+
+    /// CHECK: this is a pda that manages the escrow account
+    #[account(seeds = [game.key().as_ref()], bump)]
+    pub game_authority: AccountInfo<'info>,
+
+    #[account(mut, address = get_associated_token_address(&game_authority.key(), &mint.key()), close = cleaner)]
+    pub escrow_token_account: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub cleaner: Signer<'info>,
 
     pub token_program: Program<'info, Token>,
 }
