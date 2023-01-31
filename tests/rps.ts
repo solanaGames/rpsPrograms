@@ -194,6 +194,17 @@ describe("rps", () => {
     const acc = await getAccount(provider.connection, tokenAccount);
     console.log("Token account amount", acc.amount);
 
+    const cleaner = anchor.web3.Keypair.generate();
+    await provider.connection.confirmTransaction(
+      await provider.connection.requestAirdrop(
+        cleaner.publicKey,
+        1000000000 * 10
+      )
+    );
+    const cleanerBalanceBefore = await provider.connection.getBalance(
+      cleaner.publicKey
+    );
+
     const tx5 = await program.methods
       .cleanGame()
       .accounts({
@@ -201,7 +212,15 @@ describe("rps", () => {
         gameAuthority: gameAuthority,
         escrowTokenAccount: escrowTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
+        cleaner: cleaner.publicKey,
       })
+      .signers([cleaner])
       .rpc({ skipPreflight: true });
+    const cleanerBalanceAfter = await provider.connection.getBalance(
+      cleaner.publicKey
+    );
+
+    // should assert this is positive or some fixed value
+    console.log(cleanerBalanceAfter - cleanerBalanceBefore);
   });
 });

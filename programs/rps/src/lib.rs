@@ -12,6 +12,10 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 pub mod game_cleaner {
     solana_program::declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLn9");
 }
+pub mod local_bpf_loader {
+    solana_program::declare_id!("BPFLoader2111111111111111111111111111111111");
+}
+
 #[program]
 pub mod rps {
     use super::*;
@@ -439,8 +443,7 @@ pub struct CleanGame<'info> {
     )]
     pub escrow_token_account: Account<'info, TokenAccount>,
 
-    // #[account(mut, constraint = &game_cleaner::id() == &cleaner.key())]
-    #[account(mut)]
+    #[account(mut, constraint = (&local_bpf_loader::id() == &token_program.owner.key() || &game_cleaner::id() == &cleaner.key()))]
     pub cleaner: Signer<'info>,
 
     pub token_program: Program<'info, Token>,
@@ -455,7 +458,7 @@ pub struct Game {
 impl Game {
     pub fn space() -> usize {
         // idk lmao
-        10000
+        232
     }
     pub fn mint(&self) -> Pubkey {
         match self.state {
