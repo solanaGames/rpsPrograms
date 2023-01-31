@@ -68,6 +68,17 @@ export type Rps = {
         {
           "name": "wagerAmount",
           "type": "u64"
+        },
+        {
+          "name": "entryProof",
+          "type": {
+            "option": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
         }
       ]
     },
@@ -628,6 +639,17 @@ export const IDL: Rps = {
         {
           "name": "wagerAmount",
           "type": "u64"
+        },
+        {
+          "name": "entryProof",
+          "type": {
+            "option": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
         }
       ]
     },

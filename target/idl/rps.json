@@ -68,6 +68,17 @@
         {
           "name": "wagerAmount",
           "type": "u64"
+        },
+        {
+          "name": "entryProof",
+          "type": {
+            "option": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
         }
       ]
     },

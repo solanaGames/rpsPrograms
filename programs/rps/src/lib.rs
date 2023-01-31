@@ -26,6 +26,7 @@ pub mod rps {
         game_seed: u64,
         commitment: [u8; 32],
         wager_amount: u64,
+        entry_proof: Option<[u8; 32]>,
     ) -> Result<()> {
         ctx.accounts.game.state = GameState::Initialized;
 
@@ -35,7 +36,7 @@ pub mod rps {
             config: GameConfig {
                 mint: ctx.accounts.mint.key(),
                 wager_amount,
-                entry_proof: None,
+                entry_proof: entry_proof,
             },
         };
 
