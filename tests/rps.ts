@@ -34,7 +34,14 @@ describe("rps", () => {
 
   it("Is initialized!", async () => {
     const player = anchor.web3.Keypair.generate();
-    const game = anchor.web3.Keypair.generate();
+    const gameSeed = new BN(10);
+    const [game, _gameBump] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from(anchor.utils.bytes.utf8.encode("game")),
+        gameSeed.toArrayLike(Buffer, "le", 8),
+      ],
+      program.programId
+    );
     const provider = anchor.getProvider();
     const salt = Math.floor(Math.random() * 10000000);
     const player1Choice = 1;
@@ -72,15 +79,22 @@ describe("rps", () => {
     // const acc = await getAccount(provider.connection, tokenAccount);
     // console.log("Token account ", acc);
 
-    const [gameAuthority, _] = await PublicKey.findProgramAddress(
-      [game.publicKey.toBuffer()],
-      program.programId
-    );
-    const escrowTokenAccount = await getAssociatedTokenAddress(
-      mint,
-      gameAuthority,
-      true
-    );
+    const [gameAuthority, _gameAuthorityBump] =
+      PublicKey.findProgramAddressSync(
+        [
+          Buffer.from(anchor.utils.bytes.utf8.encode("authority")),
+          game.toBuffer(),
+        ],
+        program.programId
+      );
+    const [escrowTokenAccount, _escrowTokenAccountBump] =
+      PublicKey.findProgramAddressSync(
+        [
+          Buffer.from(anchor.utils.bytes.utf8.encode("escrow")),
+          game.toBuffer(),
+        ],
+        program.programId
+      );
 
     const buf = Buffer.concat([
       player.publicKey.toBuffer(),
@@ -90,9 +104,9 @@ describe("rps", () => {
     let commitment = Buffer.from(keccak_256(buf), "hex");
 
     const tx = await program.methods
-      .createGame(commitment.toJSON().data, new BN(10))
+      .createGame(gameSeed, commitment.toJSON().data, new BN(10))
       .accounts({
-        game: game.publicKey,
+        game: game,
         player: player.publicKey,
         mint: mint,
         playerTokenAccount: tokenAccount,
@@ -102,12 +116,12 @@ describe("rps", () => {
         systemProgram: anchor.web3.SystemProgram.programId,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       })
-      .signers([game, player])
+      .signers([player])
       .rpc();
 
     console.log("Your transaction signature", tx);
 
-    const gameAccount = await program.account.game.fetch(game.publicKey);
+    const gameAccount = await program.account.game.fetch(game);
     console.log("Your game account", gameAccount);
 
     const player2 = anchor.web3.Keypair.generate();
@@ -137,8 +151,7 @@ describe("rps", () => {
       .joinGame({ rock: {} }, null)
       .accounts({
         player: player2.publicKey,
-        game: game.publicKey,
-        mint: mint,
+        game: game,
         playerTokenAccount: tokenAccount2,
         gameAuthority: gameAuthority,
         escrowTokenAccount: escrowTokenAccount,
@@ -148,38 +161,47 @@ describe("rps", () => {
       .rpc({ skipPreflight: true });
     console.log("Your transaction signature", tx);
 
-    const gameAccount2 = await program.account.game.fetch(game.publicKey);
+    const gameAccount2 = await program.account.game.fetch(game);
     console.log("Your game account", gameAccount2);
 
     const tx3 = await program.methods
       .revealGame({ paper: {} }, new BN(salt))
       .accounts({
         player: player.publicKey,
-        game: game.publicKey,
+        game: game,
       })
       .signers([player])
       .rpc({ skipPreflight: true });
 
-    const gameAccount3 = await program.account.game.fetch(game.publicKey);
+    const gameAccount3 = await program.account.game.fetch(game);
     console.log("Your game account", gameAccount3);
 
     const tx4 = await program.methods
       .settleGame()
       .accounts({
-        game: game.publicKey,
-        mint: mint,
+        game: game,
         player1TokenAccount: tokenAccount,
         player2TokenAccount: tokenAccount2,
         gameAuthority: gameAuthority,
         escrowTokenAccount: escrowTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
-      .rpc();
+      .rpc({ skipPreflight: true });
 
-    const gameAccount4 = await program.account.game.fetch(game.publicKey);
+    const gameAccount4 = await program.account.game.fetch(game);
     console.log("Your game account", JSON.stringify(gameAccount4));
 
     const acc = await getAccount(provider.connection, tokenAccount);
     console.log("Token account amount", acc.amount);
+
+    const tx5 = await program.methods
+      .cleanGame()
+      .accounts({
+        game: game,
+        gameAuthority: gameAuthority,
+        escrowTokenAccount: escrowTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc({ skipPreflight: true });
   });
 });

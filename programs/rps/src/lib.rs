@@ -1,15 +1,17 @@
 use anchor_lang::prelude::*;
 mod logic;
 use anchor_spl::{
-    associated_token::{get_associated_token_address, AssociatedToken},
+    associated_token::AssociatedToken,
     token::{Mint, Token, TokenAccount},
 };
-use spl_associated_token_account::instruction::create_associated_token_account;
 
 use logic::{process_action, Actions, GameConfig, GameState, Winner, RPS};
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
+pub mod game_cleaner {
+    solana_program::declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLn9");
+}
 #[program]
 pub mod rps {
     use super::*;
@@ -17,6 +19,7 @@ pub mod rps {
 
     pub fn create_game(
         ctx: Context<CreateGame>,
+        game_seed: u64,
         commitment: [u8; 32],
         wager_amount: u64,
     ) -> Result<()> {
@@ -32,6 +35,7 @@ pub mod rps {
             },
         };
 
+        ctx.accounts.game.seed = game_seed;
         ctx.accounts.game.state = process_action(
             ctx.accounts.game.key(),
             ctx.accounts.game.state,
@@ -41,23 +45,6 @@ pub mod rps {
 
         match ctx.accounts.game.state {
             GameState::AcceptingChallenge { .. } => {
-                solana_program::program::invoke(
-                    &create_associated_token_account(
-                        &ctx.accounts.player.key(),
-                        &ctx.accounts.game_authority.key(),
-                        &ctx.accounts.mint.key(),
-                        &ctx.accounts.token_program.key(),
-                    ),
-                    &[
-                        ctx.accounts.player.to_account_info(),
-                        ctx.accounts.escrow_token_account.to_account_info(),
-                        ctx.accounts.game_authority.to_account_info(),
-                        ctx.accounts.mint.to_account_info(),
-                        ctx.accounts.system_program.to_account_info(),
-                        ctx.accounts.token_program.to_account_info(),
-                    ],
-                )?;
-
                 solana_program::program::invoke(
                     &spl_token::instruction::transfer(
                         &ctx.accounts.token_program.key(),
@@ -97,10 +84,10 @@ pub mod rps {
 
         match ctx.accounts.game.state {
             GameState::AcceptingReveal {
-                player_1,
-                player_2,
+                player_1: _,
+                player_2: _,
                 config,
-                expiry_slot,
+                expiry_slot: _,
             } => {
                 // transfer tokens from player_token_account to escrow_token_account
                 solana_program::program::invoke(
@@ -168,8 +155,8 @@ pub mod rps {
         match ctx.accounts.game.state {
             GameState::Settled {
                 result,
-                player_1,
-                player_2,
+                player_1: _,
+                player_2: _,
                 config,
             } => match result {
                 Winner::P1 => {
@@ -189,6 +176,7 @@ pub mod rps {
                             ctx.accounts.game_authority.to_account_info(),
                         ],
                         &[&[
+                            b"authority".as_ref(),
                             ctx.accounts.game.key().as_ref(),
                             &[*ctx.bumps.get("game_authority").unwrap()],
                         ]],
@@ -211,6 +199,7 @@ pub mod rps {
                             ctx.accounts.game_authority.to_account_info(),
                         ],
                         &[&[
+                            b"authority".as_ref(),
                             ctx.accounts.game.key().as_ref(),
                             &[*ctx.bumps.get("game_authority").unwrap()],
                         ]],
@@ -233,6 +222,7 @@ pub mod rps {
                             ctx.accounts.game_authority.to_account_info(),
                         ],
                         &[&[
+                            b"authority".as_ref(),
                             ctx.accounts.game.key().as_ref(),
                             &[*ctx.bumps.get("game_authority").unwrap()],
                         ]],
@@ -253,6 +243,7 @@ pub mod rps {
                             ctx.accounts.game_authority.to_account_info(),
                         ],
                         &[&[
+                            b"authority".as_ref(),
                             ctx.accounts.game.key().as_ref(),
                             &[*ctx.bumps.get("game_authority").unwrap()],
                         ]],
@@ -266,38 +257,52 @@ pub mod rps {
     }
 
     pub fn clean_game(ctx: Context<CleanGame>) -> Result<()> {
-        // check only designated closer can close
         match ctx.accounts.game.state {
-            GameState::Settled { result: _, player_1: _, player_2: _, config: _} => {
+            GameState::Settled {
+                result: _,
+                player_1: _,
+                player_2: _,
+                config: _,
+            } => {
                 solana_program::program::invoke_signed(
                     &spl_token::instruction::close_account(
-                        &ctx.accounts.token_program.key(), 
+                        &ctx.accounts.token_program.key(),
                         &ctx.accounts.escrow_token_account.key(),
                         &ctx.accounts.cleaner.key(),
                         &ctx.accounts.game_authority.key(),
-                        &[]
+                        &[],
                     )?,
                     &[
-                        ctx.accounts.token_program.to_account_info(), 
+                        ctx.accounts.token_program.to_account_info(),
                         ctx.accounts.escrow_token_account.to_account_info(),
                         ctx.accounts.cleaner.to_account_info(),
                         ctx.accounts.game_authority.to_account_info(),
                     ],
                     &[&[
+                        b"authority".as_ref(),
                         ctx.accounts.game.key().as_ref(),
                         &[*ctx.bumps.get("game_authority").unwrap()],
                     ]],
                 )?;
             }
-            _ => {panic!("game not settled can't clean")}
+            _ => {
+                panic!("game not settled can't clean")
+            }
         }
         Ok(())
     }
 }
 
 #[derive(Accounts)]
+#[instruction(game_seed: u64)]
 pub struct CreateGame<'info> {
-    #[account(init, payer = player, space = 10000)]
+    #[account(
+        init,
+        seeds = [b"game".as_ref(), &game_seed.to_le_bytes()],
+        bump,
+        payer = player,
+        space = Game::space()
+    )]
     pub game: Account<'info, Game>,
 
     #[account(mut)]
@@ -309,12 +314,17 @@ pub struct CreateGame<'info> {
     pub player_token_account: Account<'info, TokenAccount>,
 
     /// CHECK: this is a pda that manages the escrow account
-    #[account(mut, seeds = [game.key().as_ref()], bump)]
+    #[account(seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
     pub game_authority: AccountInfo<'info>,
 
-    /// CHECK: this is being create in this call
-    #[account(mut, address = get_associated_token_address(&game_authority.key(), &mint.key()))]
-    pub escrow_token_account: AccountInfo<'info>,
+    #[account(init,
+        payer = player,
+        seeds = [b"escrow".as_ref(), game.key().as_ref()],
+        bump,
+        token::mint = mint,
+        token::authority = game_authority,
+    )]
+    pub escrow_token_account: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
@@ -326,19 +336,26 @@ pub struct JoinGame<'info> {
     #[account(mut)]
     player: Signer<'info>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"game".as_ref(), &game.seed.to_le_bytes()],
+        bump,
+    )]
     pub game: Account<'info, Game>,
-
-    pub mint: Account<'info, Mint>,
 
     #[account(mut)]
     pub player_token_account: Account<'info, TokenAccount>,
 
     /// CHECK: this is a pda that manages the escrow account
-    #[account(mut, seeds = [game.key().as_ref()], bump)]
+    #[account(seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
     pub game_authority: AccountInfo<'info>,
 
-    #[account(mut, address = get_associated_token_address(&game_authority.key(), &mint.key()))]
+    #[account(mut,
+        seeds = [b"escrow".as_ref(), game.key().as_ref()],
+        bump,
+        token::mint = game.mint(),
+        token::authority = game_authority,
+    )]
     pub escrow_token_account: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
@@ -346,7 +363,11 @@ pub struct JoinGame<'info> {
 
 #[derive(Accounts)]
 pub struct RevealGame<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"game".as_ref(), &game.seed.to_le_bytes()],
+        bump,
+    )]
     pub game: Account<'info, Game>,
 
     #[account(mut)]
@@ -355,7 +376,11 @@ pub struct RevealGame<'info> {
 
 #[derive(Accounts)]
 pub struct ExpireGame<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"game".as_ref(), &game.seed.to_le_bytes()],
+        bump,
+    )]
     pub game: Account<'info, Game>,
 
     #[account(mut)]
@@ -364,42 +389,57 @@ pub struct ExpireGame<'info> {
 
 #[derive(Accounts)]
 pub struct SettleGame<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"game".as_ref(), &game.seed.to_le_bytes()],
+        bump,
+    )]
     pub game: Account<'info, Game>,
-
-    // i dont think you actually need this you can just do game.state.mint in the ata check below in fact that is prob better
-    pub mint: Account<'info, Mint>,
 
     #[account(mut)]
     pub player1_token_account: Account<'info, TokenAccount>,
+    #[account(mut)]
     pub player2_token_account: Account<'info, TokenAccount>,
 
     /// CHECK: this is a pda that manages the escrow account
-    #[account(mut, seeds = [game.key().as_ref()], bump)]
+    #[account(seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
     pub game_authority: AccountInfo<'info>,
 
-    /// CHECK: this is being create in this call
-    #[account(mut, address = get_associated_token_address(&game_authority.key(), &mint.key()))]
-    pub escrow_token_account: AccountInfo<'info>,
+    #[account(mut,
+        seeds = [b"escrow".as_ref(), game.key().as_ref()],
+        bump,
+        token::mint = game.mint(),
+        token::authority = game_authority,
+    )]
+    pub escrow_token_account: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
 pub struct CleanGame<'info> {
-    #[account(mut, close = cleaner)]
+    #[account(
+        mut,
+        close = cleaner,
+        seeds = [b"game".as_ref(), &game.seed.to_le_bytes()],
+        bump,
+    )]
     pub game: Account<'info, Game>,
 
-    // i dont think you actually need this you can just do game.state.mint in the ata check below in fact that is prob better
-    pub mint: Account<'info, Mint>,
-
     /// CHECK: this is a pda that manages the escrow account
-    #[account(seeds = [game.key().as_ref()], bump)]
+    #[account(seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
     pub game_authority: AccountInfo<'info>,
 
-    #[account(mut, address = get_associated_token_address(&game_authority.key(), &mint.key()), close = cleaner)]
+    #[account(mut,
+        close = cleaner,
+        seeds = [b"escrow".as_ref(), game.key().as_ref()],
+        bump,
+        token::mint = game.mint(),
+        token::authority = game_authority,
+    )]
     pub escrow_token_account: Account<'info, TokenAccount>,
 
+    // #[account(mut, constraint = &game_cleaner::id() == &cleaner.key())]
     #[account(mut)]
     pub cleaner: Signer<'info>,
 
@@ -408,5 +448,22 @@ pub struct CleanGame<'info> {
 
 #[account]
 pub struct Game {
+    pub seed: u64,
     pub state: GameState,
+}
+
+impl Game {
+    pub fn space() -> usize {
+        // idk lmao
+        10000
+    }
+    pub fn mint(&self) -> Pubkey {
+        match self.state {
+            GameState::AcceptingChallenge { config, .. } => config.mint,
+            GameState::AcceptingReveal { config, .. } => config.mint,
+            GameState::AcceptingSettle { config, .. } => config.mint,
+            GameState::Settled { config, .. } => config.mint,
+            _ => panic!("??? no mint"),
+        }
+    }
 }
