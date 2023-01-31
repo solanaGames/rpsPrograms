@@ -7,7 +7,7 @@ use anchor_spl::{
 
 use logic::{process_action, Actions, GameConfig, GameState, Winner, RPS};
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("rpsx2U29nY4LQmzw9kdvc7sgDBYK8N2UXpex3SJofuX");
 
 pub mod game_cleaner {
     solana_program::declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLn9");
