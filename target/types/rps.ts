@@ -8,7 +8,7 @@ export type Rps = {
         {
           "name": "game",
           "isMut": true,
-          "isSigner": true
+          "isSigner": false
         },
         {
           "name": "player",
@@ -27,7 +27,7 @@ export type Rps = {
         },
         {
           "name": "gameAuthority",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -52,6 +52,10 @@ export type Rps = {
         }
       ],
       "args": [
+        {
+          "name": "gameSeed",
+          "type": "u64"
+        },
         {
           "name": "commitment",
           "type": {
@@ -81,18 +85,13 @@ export type Rps = {
           "isSigner": false
         },
         {
-          "name": "mint",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "playerTokenAccount",
           "isMut": true,
           "isSigner": false
         },
         {
           "name": "gameAuthority",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -173,29 +172,55 @@ export type Rps = {
           "isSigner": false
         },
         {
-          "name": "mint",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "player1TokenAccount",
           "isMut": true,
           "isSigner": false
         },
         {
           "name": "player2TokenAccount",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
           "name": "gameAuthority",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
           "name": "escrowTokenAccount",
           "isMut": true,
           "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cleanGame",
+      "accounts": [
+        {
+          "name": "game",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "gameAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "escrowTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "cleaner",
+          "isMut": true,
+          "isSigner": true
         },
         {
           "name": "tokenProgram",
@@ -212,6 +237,10 @@ export type Rps = {
       "type": {
         "kind": "struct",
         "fields": [
+          {
+            "name": "seed",
+            "type": "u64"
+          },
           {
             "name": "state",
             "type": {
@@ -539,7 +568,7 @@ export const IDL: Rps = {
         {
           "name": "game",
           "isMut": true,
-          "isSigner": true
+          "isSigner": false
         },
         {
           "name": "player",
@@ -558,7 +587,7 @@ export const IDL: Rps = {
         },
         {
           "name": "gameAuthority",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -583,6 +612,10 @@ export const IDL: Rps = {
         }
       ],
       "args": [
+        {
+          "name": "gameSeed",
+          "type": "u64"
+        },
         {
           "name": "commitment",
           "type": {
@@ -612,18 +645,13 @@ export const IDL: Rps = {
           "isSigner": false
         },
         {
-          "name": "mint",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "playerTokenAccount",
           "isMut": true,
           "isSigner": false
         },
         {
           "name": "gameAuthority",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -704,29 +732,55 @@ export const IDL: Rps = {
           "isSigner": false
         },
         {
-          "name": "mint",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "player1TokenAccount",
           "isMut": true,
           "isSigner": false
         },
         {
           "name": "player2TokenAccount",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
           "name": "gameAuthority",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
           "name": "escrowTokenAccount",
           "isMut": true,
           "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cleanGame",
+      "accounts": [
+        {
+          "name": "game",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "gameAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "escrowTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "cleaner",
+          "isMut": true,
+          "isSigner": true
         },
         {
           "name": "tokenProgram",
@@ -743,6 +797,10 @@ export const IDL: Rps = {
       "type": {
         "kind": "struct",
         "fields": [
+          {
+            "name": "seed",
+            "type": "u64"
+          },
           {
             "name": "state",
             "type": {

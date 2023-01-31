@@ -8,7 +8,7 @@
         {
           "name": "game",
           "isMut": true,
-          "isSigner": true
+          "isSigner": false
         },
         {
           "name": "player",
@@ -27,7 +27,7 @@
         },
         {
           "name": "gameAuthority",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -52,6 +52,10 @@
         }
       ],
       "args": [
+        {
+          "name": "gameSeed",
+          "type": "u64"
+        },
         {
           "name": "commitment",
           "type": {
@@ -81,18 +85,13 @@
           "isSigner": false
         },
         {
-          "name": "mint",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "playerTokenAccount",
           "isMut": true,
           "isSigner": false
         },
         {
           "name": "gameAuthority",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -173,29 +172,55 @@
           "isSigner": false
         },
         {
-          "name": "mint",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "player1TokenAccount",
           "isMut": true,
           "isSigner": false
         },
         {
           "name": "player2TokenAccount",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
           "name": "gameAuthority",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
           "name": "escrowTokenAccount",
           "isMut": true,
           "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cleanGame",
+      "accounts": [
+        {
+          "name": "game",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "gameAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "escrowTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "cleaner",
+          "isMut": true,
+          "isSigner": true
         },
         {
           "name": "tokenProgram",
@@ -212,6 +237,10 @@
       "type": {
         "kind": "struct",
         "fields": [
+          {
+            "name": "seed",
+            "type": "u64"
+          },
           {
             "name": "state",
             "type": {
@@ -526,8 +555,5 @@
         ]
       }
     }
-  ],
-  "metadata": {
-    "address": "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
-  }
+  ]
 }
