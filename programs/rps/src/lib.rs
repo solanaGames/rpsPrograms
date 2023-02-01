@@ -10,7 +10,7 @@ use logic::{process_action, Actions, GameConfig, GameState, Winner, RPS};
 declare_id!("rpsx2U29nY4LQmzw9kdvc7sgDBYK8N2UXpex3SJofuX");
 
 pub mod game_cleaner {
-    solana_program::declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLn9");
+    solana_program::declare_id!("rcxrvoLEpa65dqqRVEqAADicpNnhWBwtWtzyFHZMzKW");
 }
 pub mod local_bpf_loader {
     solana_program::declare_id!("BPFLoader2111111111111111111111111111111111");
