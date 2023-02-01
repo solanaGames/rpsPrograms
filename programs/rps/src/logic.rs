@@ -296,8 +296,8 @@ pub fn process_action(
         (
             GameState::AcceptingSettle {
                 result,
-                player_1: p1 @ PlayerState::Revealed { .. },
-                player_2: p2 @ PlayerState::Revealed { .. },
+                player_1: p1,
+                player_2: p2,
                 config,
             },
             Actions::Settle,

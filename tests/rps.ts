@@ -1,4 +1,4 @@
-import * as anchor from "@project-serum/anchor";
+import * as anchor from "@coral-xyz/anchor";
 import {
   PublicKey,
   SystemProgram,
@@ -6,7 +6,7 @@ import {
   Connection,
   Commitment,
 } from "@solana/web3.js";
-import { Program } from "@project-serum/anchor";
+import { Program } from "@coral-xyz/anchor";
 import { Rps } from "../target/types/rps";
 import { BN } from "bn.js";
 import { keccak_256 } from "js-sha3";
@@ -104,7 +104,7 @@ describe("rps", () => {
     let commitment = Buffer.from(keccak_256(buf), "hex");
 
     const tx = await program.methods
-      .createGame(gameSeed, commitment.toJSON().data, new BN(10))
+      .createGame(gameSeed, commitment.toJSON().data, new BN(10), null)
       .accounts({
         game: game,
         player: player.publicKey,
@@ -190,6 +190,8 @@ describe("rps", () => {
 
     const gameAccount4 = await program.account.game.fetch(game);
     console.log("Your game account", JSON.stringify(gameAccount4));
+
+    gameAccount4.state.settled.player2.revealed.choice;
 
     const acc = await getAccount(provider.connection, tokenAccount);
     console.log("Token account amount", acc.amount);
