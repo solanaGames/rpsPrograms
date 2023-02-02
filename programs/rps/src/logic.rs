@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use serde::{Serialize, Deserialize};
 use solana_program::keccak::hashv;
 
 pub fn verify_commitment(pubkey: Pubkey, commitment: [u8; 32], salt: u64, choice: RPS) -> bool {
@@ -13,7 +14,7 @@ pub fn verify_entry(pubkey: Pubkey, entry_proof: [u8; 32], secret: u64) -> bool 
     hash.0 == entry_proof
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, AnchorSerialize, AnchorDeserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
 pub enum RPS {
     Rock,
     Paper,
@@ -30,7 +31,7 @@ impl From<RPS> for u8 {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, AnchorSerialize, AnchorDeserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
 pub enum Winner {
     P1,
     P2,
@@ -56,6 +57,22 @@ pub enum PlayerState {
         pubkey: Pubkey,
         choice: RPS,
     },
+}
+
+impl PlayerState {
+    pub fn pubkey(self) -> Pubkey {
+        match self {
+            PlayerState::Committed { pubkey, .. } => pubkey,
+            PlayerState::Revealed { pubkey, .. } => pubkey,
+        }
+    }
+    pub fn choice_or_unrevealed(self) -> Option<RPS>  {
+        match self {
+            PlayerState::Committed { .. } => None,
+            PlayerState::Revealed {  choice, .. } => Some(choice),
+        }
+
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, AnchorSerialize, AnchorDeserialize)]

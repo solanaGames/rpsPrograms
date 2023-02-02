@@ -191,8 +191,6 @@ describe("rps", () => {
     const gameAccount4 = await program.account.game.fetch(game);
     console.log("Your game account", JSON.stringify(gameAccount4));
 
-    gameAccount4.state.settled.player2.revealed.choice;
-
     const acc = await getAccount(provider.connection, tokenAccount);
     console.log("Token account amount", acc.amount);
 
@@ -221,7 +219,6 @@ describe("rps", () => {
     const cleanerBalanceAfter = await provider.connection.getBalance(
       cleaner.publicKey
     );
-
     // should assert this is positive or some fixed value
     console.log(cleanerBalanceAfter - cleanerBalanceBefore);
   });

@@ -168,8 +168,11 @@ export type Rps = {
         },
         {
           "name": "player",
-          "isMut": true,
-          "isSigner": true
+          "isMut": false,
+          "isSigner": false,
+          "docs": [
+            "checked in the game logic code so this doesn't need to be a signer"
+          ]
         }
       ],
       "args": []
@@ -739,8 +742,11 @@ export const IDL: Rps = {
         },
         {
           "name": "player",
-          "isMut": true,
-          "isSigner": true
+          "isMut": false,
+          "isSigner": false,
+          "docs": [
+            "checked in the game logic code so this doesn't need to be a signer"
+          ]
         }
       ],
       "args": []

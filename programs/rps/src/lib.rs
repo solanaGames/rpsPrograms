@@ -6,6 +6,7 @@ use anchor_spl::{
 };
 
 use logic::{process_action, Actions, GameConfig, GameState, Winner, RPS};
+use serde::{Serialize, Deserialize};
 
 declare_id!("rpsx2U29nY4LQmzw9kdvc7sgDBYK8N2UXpex3SJofuX");
 
@@ -160,11 +161,13 @@ pub mod rps {
         match ctx.accounts.game.state {
             GameState::Settled {
                 result,
-                player_1: _,
-                player_2: _,
+                player_1,
+                player_2,
                 config,
             } => match result {
                 Winner::P1 => {
+                    // if game expired they just get wager back
+                    let payout_amount = if player_1.pubkey() == player_2.pubkey() {config.wager_amount} else {config.wager_amount * 2};
                     solana_program::program::invoke_signed(
                         &spl_token::instruction::transfer(
                             &ctx.accounts.token_program.key(),
@@ -172,7 +175,7 @@ pub mod rps {
                             &ctx.accounts.player1_token_account.key(),
                             &ctx.accounts.game_authority.key(),
                             &[],
-                            config.wager_amount * 2,
+                            payout_amount,
                         )?,
                         &[
                             ctx.accounts.token_program.to_account_info(),
@@ -264,11 +267,25 @@ pub mod rps {
     pub fn clean_game(ctx: Context<CleanGame>) -> Result<()> {
         match ctx.accounts.game.state {
             GameState::Settled {
-                result: _,
-                player_1: _,
-                player_2: _,
-                config: _,
+                result,
+                player_1,
+                player_2,
+                config: GameConfig { wager_amount, mint, entry_proof },
             } => {
+                let gr = GameEvent{
+                    event_name: "game_result".to_string(),
+                    event_version: 1,
+                    player_1: player_1.pubkey().to_string(),
+                    choice_1: player_1.choice_or_unrevealed(),
+                    player_2: player_2.pubkey().to_string(),
+                    choice_2: player_2.choice_or_unrevealed(),
+                    result: result,
+                    wager: wager_amount,
+                    mint: mint.to_string(),
+                    public: entry_proof.is_none(),
+                };
+                msg!("{}", serde_json::to_string(&gr).unwrap());
+
                 solana_program::program::invoke_signed(
                     &spl_token::instruction::close_account(
                         &ctx.accounts.token_program.key(),
@@ -296,6 +313,20 @@ pub mod rps {
         }
         Ok(())
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GameEvent {
+    event_name:String,
+    event_version: u64,
+    player_1: String,
+    choice_1: Option<RPS>,
+    player_2: String,
+    choice_2: Option<RPS>,
+    result: Winner,
+    wager: u64,
+    mint: String,
+    public: bool,
 }
 
 #[derive(Accounts)]
@@ -388,8 +419,10 @@ pub struct ExpireGame<'info> {
     )]
     pub game: Account<'info, Game>,
 
-    #[account(mut)]
-    pub player: Signer<'info>,
+    /// CHECK: anyone can expire the game and the default winning player is
+    /// checked in the game logic code so this doesn't need to be a signer
+    #[account()]
+    pub player: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]
