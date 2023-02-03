@@ -58,16 +58,6 @@ pub mod rps {
                     wager_amount,
                 )?;
             }
-    //         anchor_lang::system_program::transfer(
-    //     CpiContext::new(
-    //         ctx.accounts.system_program.to_account_info(),
-    //         Transfer {
-    //             from: ctx.accounts.pda_sender.to_account_info(),
-    //             to: ctx.accounts.receiver.to_account_info(),
-    //         },
-    //     ).with_signer(&[bump, &[seed]]),
-    //     TRANSFER_LAMPORTS_AMOUNT,
-    // )
             _ => panic!("Invalid state"),
         };
 
