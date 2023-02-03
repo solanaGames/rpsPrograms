@@ -1,12 +1,9 @@
 use anchor_lang::prelude::*;
 mod logic;
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token::{Mint, Token, TokenAccount},
-};
 
 use logic::{process_action, Actions, GameConfig, GameState, Winner, RPS};
-use serde::{Serialize, Deserialize};
+use program::Rps;
+use serde::{Deserialize, Serialize};
 
 declare_id!("rpsx2U29nY4LQmzw9kdvc7sgDBYK8N2UXpex3SJofuX");
 
@@ -35,13 +32,12 @@ pub mod rps {
             player_1_pubkey: ctx.accounts.player.key(),
             commitment,
             config: GameConfig {
-                mint: ctx.accounts.mint.key(),
-                wager_amount,
                 entry_proof: entry_proof,
             },
         };
 
         ctx.accounts.game.seed = game_seed;
+        ctx.accounts.game.wager_amount = wager_amount;
         ctx.accounts.game.state = process_action(
             ctx.accounts.game.key(),
             ctx.accounts.game.state,
@@ -51,21 +47,15 @@ pub mod rps {
 
         match ctx.accounts.game.state {
             GameState::AcceptingChallenge { .. } => {
-                solana_program::program::invoke(
-                    &spl_token::instruction::transfer(
-                        &ctx.accounts.token_program.key(),
-                        &ctx.accounts.player_token_account.key(),
-                        &ctx.accounts.escrow_token_account.key(),
-                        &ctx.accounts.player.key(),
-                        &[],
-                        wager_amount,
-                    )?,
-                    &[
-                        ctx.accounts.token_program.to_account_info(),
-                        ctx.accounts.player_token_account.to_account_info(),
-                        ctx.accounts.escrow_token_account.to_account_info(),
-                        ctx.accounts.player.to_account_info(),
-                    ],
+                anchor_lang::system_program::transfer(
+                    CpiContext::new(
+                        ctx.accounts.system_program.to_account_info(),
+                        anchor_lang::system_program::Transfer {
+                            from: ctx.accounts.player.to_account_info(),
+                            to: ctx.accounts.game_authority.to_account_info(),
+                        },
+                    ),
+                    wager_amount,
                 )?;
             }
             _ => panic!("Invalid state"),
@@ -89,28 +79,16 @@ pub mod rps {
         );
 
         match ctx.accounts.game.state {
-            GameState::AcceptingReveal {
-                player_1: _,
-                player_2: _,
-                config,
-                expiry_slot: _,
-            } => {
-                // transfer tokens from player_token_account to escrow_token_account
-                solana_program::program::invoke(
-                    &spl_token::instruction::transfer(
-                        &ctx.accounts.token_program.key(),
-                        &ctx.accounts.player_token_account.key(),
-                        &ctx.accounts.escrow_token_account.key(),
-                        &ctx.accounts.player.key(),
-                        &[],
-                        config.wager_amount,
-                    )?,
-                    &[
-                        ctx.accounts.token_program.to_account_info(),
-                        ctx.accounts.player_token_account.to_account_info(),
-                        ctx.accounts.escrow_token_account.to_account_info(),
-                        ctx.accounts.player.to_account_info(),
-                    ],
+            GameState::AcceptingReveal { .. } => {
+                anchor_lang::system_program::transfer(
+                    CpiContext::new(
+                        ctx.accounts.system_program.to_account_info(),
+                        anchor_lang::system_program::Transfer {
+                            from: ctx.accounts.player.to_account_info(),
+                            to: ctx.accounts.game_authority.to_account_info(),
+                        },
+                    ),
+                    ctx.accounts.game.wager_amount,
                 )?;
             }
             _ => panic!("Invalid state"),
@@ -163,98 +141,78 @@ pub mod rps {
                 result,
                 player_1,
                 player_2,
-                config,
+                config: _,
             } => match result {
                 Winner::P1 => {
                     // if game expired they just get wager back
-                    let payout_amount = if player_1.pubkey() == player_2.pubkey() {config.wager_amount} else {config.wager_amount * 2};
-                    solana_program::program::invoke_signed(
-                        &spl_token::instruction::transfer(
-                            &ctx.accounts.token_program.key(),
-                            &ctx.accounts.escrow_token_account.key(),
-                            &ctx.accounts.player1_token_account.key(),
-                            &ctx.accounts.game_authority.key(),
-                            &[],
-                            payout_amount,
-                        )?,
-                        &[
-                            ctx.accounts.token_program.to_account_info(),
-                            ctx.accounts.escrow_token_account.to_account_info(),
-                            ctx.accounts.player1_token_account.to_account_info(),
-                            ctx.accounts.game_authority.to_account_info(),
-                        ],
-                        &[&[
-                            b"authority".as_ref(),
-                            ctx.accounts.game.key().as_ref(),
-                            &[*ctx.bumps.get("game_authority").unwrap()],
-                        ]],
+                    let payout_amount = if player_1.pubkey() == player_2.pubkey() {
+                        ctx.accounts.game.wager_amount
+                    } else {
+                        ctx.accounts.game.wager_amount * 2
+                    };
+                    anchor_lang::system_program::transfer(
+                        CpiContext::new_with_signer(
+                            ctx.accounts.system_program.to_account_info(),
+                            anchor_lang::system_program::Transfer {
+                                from: ctx.accounts.game_authority.to_account_info(),
+                                to: ctx.accounts.player_1.to_account_info(),
+                            },
+                            &[&[
+                                b"authority".as_ref(),
+                                ctx.accounts.game.key().as_ref(),
+                                &[*ctx.bumps.get("game_authority").unwrap()],
+                            ]]
+                        ),
+                        payout_amount,
                     )?;
                 }
                 Winner::P2 => {
-                    solana_program::program::invoke_signed(
-                        &spl_token::instruction::transfer(
-                            &ctx.accounts.token_program.key(),
-                            &ctx.accounts.escrow_token_account.key(),
-                            &ctx.accounts.player2_token_account.key(),
-                            &ctx.accounts.game_authority.key(),
-                            &[],
-                            config.wager_amount * 2,
-                        )?,
-                        &[
-                            ctx.accounts.token_program.to_account_info(),
-                            ctx.accounts.escrow_token_account.to_account_info(),
-                            ctx.accounts.player2_token_account.to_account_info(),
-                            ctx.accounts.game_authority.to_account_info(),
-                        ],
-                        &[&[
-                            b"authority".as_ref(),
-                            ctx.accounts.game.key().as_ref(),
-                            &[*ctx.bumps.get("game_authority").unwrap()],
-                        ]],
+                    anchor_lang::system_program::transfer(
+                        CpiContext::new_with_signer(
+                            ctx.accounts.system_program.to_account_info(),
+                            anchor_lang::system_program::Transfer {
+                                from: ctx.accounts.game_authority.to_account_info(),
+                                to: ctx.accounts.player_2.to_account_info(),
+                            },
+                            &[&[
+                                b"authority".as_ref(),
+                                ctx.accounts.game.key().as_ref(),
+                                &[*ctx.bumps.get("game_authority").unwrap()],
+                            ]]
+                        ),
+                        ctx.accounts.game.wager_amount * 2,
                     )?;
                 }
                 Winner::TIE => {
-                    solana_program::program::invoke_signed(
-                        &spl_token::instruction::transfer(
-                            &ctx.accounts.token_program.key(),
-                            &ctx.accounts.escrow_token_account.key(),
-                            &ctx.accounts.player1_token_account.key(),
-                            &ctx.accounts.game_authority.key(),
-                            &[],
-                            config.wager_amount,
-                        )?,
-                        &[
-                            ctx.accounts.token_program.to_account_info(),
-                            ctx.accounts.escrow_token_account.to_account_info(),
-                            ctx.accounts.player1_token_account.to_account_info(),
-                            ctx.accounts.game_authority.to_account_info(),
-                        ],
-                        &[&[
-                            b"authority".as_ref(),
-                            ctx.accounts.game.key().as_ref(),
-                            &[*ctx.bumps.get("game_authority").unwrap()],
-                        ]],
+                    anchor_lang::system_program::transfer(
+                        CpiContext::new_with_signer(
+                            ctx.accounts.system_program.to_account_info(),
+                            anchor_lang::system_program::Transfer {
+                                from: ctx.accounts.game_authority.to_account_info(),
+                                to: ctx.accounts.player_1.to_account_info(),
+                            },
+                            &[&[
+                                b"authority".as_ref(),
+                                ctx.accounts.game.key().as_ref(),
+                                &[*ctx.bumps.get("game_authority").unwrap()],
+                            ]]
+                        ),
+                        ctx.accounts.game.wager_amount,
                     )?;
-                    solana_program::program::invoke_signed(
-                        &spl_token::instruction::transfer(
-                            &ctx.accounts.token_program.key(),
-                            &ctx.accounts.escrow_token_account.key(),
-                            &ctx.accounts.player2_token_account.key(),
-                            &ctx.accounts.game_authority.key(),
-                            &[],
-                            config.wager_amount,
-                        )?,
-                        &[
-                            ctx.accounts.token_program.to_account_info(),
-                            ctx.accounts.escrow_token_account.to_account_info(),
-                            ctx.accounts.player2_token_account.to_account_info(),
-                            ctx.accounts.game_authority.to_account_info(),
-                        ],
-                        &[&[
-                            b"authority".as_ref(),
-                            ctx.accounts.game.key().as_ref(),
-                            &[*ctx.bumps.get("game_authority").unwrap()],
-                        ]],
+                    anchor_lang::system_program::transfer(
+                        CpiContext::new_with_signer(
+                            ctx.accounts.system_program.to_account_info(),
+                            anchor_lang::system_program::Transfer {
+                                from: ctx.accounts.game_authority.to_account_info(),
+                                to: ctx.accounts.player_2.to_account_info(),
+                            },
+                            &[&[
+                                b"authority".as_ref(),
+                                ctx.accounts.game.key().as_ref(),
+                                &[*ctx.bumps.get("game_authority").unwrap()],
+                            ]]
+                        ),
+                        ctx.accounts.game.wager_amount,
                     )?;
                 }
             },
@@ -270,9 +228,9 @@ pub mod rps {
                 result,
                 player_1,
                 player_2,
-                config: GameConfig { wager_amount, mint, entry_proof },
+                config: GameConfig { entry_proof },
             } => {
-                let gr = GameEvent{
+                let gr = GameEvent {
                     event_name: "game_result".to_string(),
                     event_version: 1,
                     player_1: player_1.pubkey().to_string(),
@@ -280,32 +238,10 @@ pub mod rps {
                     player_2: player_2.pubkey().to_string(),
                     choice_2: player_2.choice_or_unrevealed(),
                     result: result,
-                    wager: wager_amount,
-                    mint: mint.to_string(),
+                    wager: ctx.accounts.game.wager_amount,
                     public: entry_proof.is_none(),
                 };
                 msg!("{}", serde_json::to_string(&gr).unwrap());
-
-                solana_program::program::invoke_signed(
-                    &spl_token::instruction::close_account(
-                        &ctx.accounts.token_program.key(),
-                        &ctx.accounts.escrow_token_account.key(),
-                        &ctx.accounts.cleaner.key(),
-                        &ctx.accounts.game_authority.key(),
-                        &[],
-                    )?,
-                    &[
-                        ctx.accounts.token_program.to_account_info(),
-                        ctx.accounts.escrow_token_account.to_account_info(),
-                        ctx.accounts.cleaner.to_account_info(),
-                        ctx.accounts.game_authority.to_account_info(),
-                    ],
-                    &[&[
-                        b"authority".as_ref(),
-                        ctx.accounts.game.key().as_ref(),
-                        &[*ctx.bumps.get("game_authority").unwrap()],
-                    ]],
-                )?;
             }
             _ => {
                 panic!("game not settled can't clean")
@@ -317,7 +253,7 @@ pub mod rps {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GameEvent {
-    event_name:String,
+    event_name: String,
     event_version: u64,
     player_1: String,
     choice_1: Option<RPS>,
@@ -325,7 +261,6 @@ pub struct GameEvent {
     choice_2: Option<RPS>,
     result: Winner,
     wager: u64,
-    mint: String,
     public: bool,
 }
 
@@ -344,27 +279,11 @@ pub struct CreateGame<'info> {
     #[account(mut)]
     pub player: Signer<'info>,
 
-    pub mint: Account<'info, Mint>,
-
-    #[account(mut)]
-    pub player_token_account: Account<'info, TokenAccount>,
-
     /// CHECK: this is a pda that manages the escrow account
-    #[account(seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
+    #[account(mut, seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
     pub game_authority: AccountInfo<'info>,
 
-    #[account(init,
-        payer = player,
-        seeds = [b"escrow".as_ref(), game.key().as_ref()],
-        bump,
-        token::mint = mint,
-        token::authority = game_authority,
-    )]
-    pub escrow_token_account: Account<'info, TokenAccount>,
-
-    pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
 #[derive(Accounts)]
@@ -379,22 +298,11 @@ pub struct JoinGame<'info> {
     )]
     pub game: Account<'info, Game>,
 
-    #[account(mut)]
-    pub player_token_account: Account<'info, TokenAccount>,
-
-    /// CHECK: this is a pda that manages the escrow account
-    #[account(seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
+    /// CHECK: this is a pda that escrows the sol
+    #[account(mut, seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
     pub game_authority: AccountInfo<'info>,
 
-    #[account(mut,
-        seeds = [b"escrow".as_ref(), game.key().as_ref()],
-        bump,
-        token::mint = game.mint(),
-        token::authority = game_authority,
-    )]
-    pub escrow_token_account: Account<'info, TokenAccount>,
-
-    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -406,7 +314,7 @@ pub struct RevealGame<'info> {
     )]
     pub game: Account<'info, Game>,
 
-    #[account(mut)]
+    #[account(constraint = Some(player.key()) == game.player_1() || Some(player.key()) == game.player_2())]
     pub player: Signer<'info>,
 }
 
@@ -421,7 +329,7 @@ pub struct ExpireGame<'info> {
 
     /// CHECK: anyone can expire the game and the default winning player is
     /// checked in the game logic code so this doesn't need to be a signer
-    #[account()]
+    #[account(constraint = Some(player.key()) == game.player_1() || Some(player.key()) == game.player_2())]
     pub player: AccountInfo<'info>,
 }
 
@@ -434,24 +342,19 @@ pub struct SettleGame<'info> {
     )]
     pub game: Account<'info, Game>,
 
-    #[account(mut)]
-    pub player1_token_account: Account<'info, TokenAccount>,
-    #[account(mut)]
-    pub player2_token_account: Account<'info, TokenAccount>,
+    /// CHECK: how do i make this check that it's the one in the enum lmao?
+    #[account(mut, constraint = Some(player_1.key()) == game.player_1())]
+    pub player_1: AccountInfo<'info>,
+
+    /// CHECK:
+    #[account(mut, constraint = Some(player_2.key()) == game.player_2())]
+    pub player_2: AccountInfo<'info>,
 
     /// CHECK: this is a pda that manages the escrow account
-    #[account(seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
+    #[account(mut, seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
     pub game_authority: AccountInfo<'info>,
 
-    #[account(mut,
-        seeds = [b"escrow".as_ref(), game.key().as_ref()],
-        bump,
-        token::mint = game.mint(),
-        token::authority = game_authority,
-    )]
-    pub escrow_token_account: Account<'info, TokenAccount>,
-
-    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -468,24 +371,19 @@ pub struct CleanGame<'info> {
     #[account(seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
     pub game_authority: AccountInfo<'info>,
 
-    #[account(mut,
-        close = cleaner,
-        seeds = [b"escrow".as_ref(), game.key().as_ref()],
-        bump,
-        token::mint = game.mint(),
-        token::authority = game_authority,
-    )]
-    pub escrow_token_account: Account<'info, TokenAccount>,
-
-    #[account(mut, constraint = (&local_bpf_loader::id() == &token_program.owner.key() || &game_cleaner::id() == &cleaner.key()))]
+    #[account(mut, constraint = (&local_bpf_loader::id() == &rps_program.owner.key() || &game_cleaner::id() == &cleaner.key()))]
     pub cleaner: Signer<'info>,
 
-    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+    
+    pub rps_program: Program<'info, Rps>
 }
 
 #[account]
+#[derive(Debug, PartialEq, Eq, Copy)]
 pub struct Game {
     pub seed: u64,
+    pub wager_amount: u64,
     pub state: GameState,
 }
 
@@ -494,13 +392,21 @@ impl Game {
         // idk lmao
         232
     }
-    pub fn mint(&self) -> Pubkey {
+    pub fn player_1(self) -> Option<Pubkey> {
         match self.state {
-            GameState::AcceptingChallenge { config, .. } => config.mint,
-            GameState::AcceptingReveal { config, .. } => config.mint,
-            GameState::AcceptingSettle { config, .. } => config.mint,
-            GameState::Settled { config, .. } => config.mint,
-            _ => panic!("??? no mint"),
+            GameState::AcceptingChallenge { player_1, .. } => Some(player_1.pubkey()),
+            GameState::AcceptingReveal { player_1, .. } => Some(player_1.pubkey()),
+            GameState::AcceptingSettle { player_1, .. } => Some(player_1.pubkey()),
+            GameState::Settled { player_1, .. } => Some(player_1.pubkey()),
+            _ => None,
+        }
+    }
+    pub fn player_2(self) -> Option<Pubkey> {
+        match self.state {
+            GameState::AcceptingReveal { player_2, .. } => Some(player_2.pubkey()),
+            GameState::AcceptingSettle { player_2, .. } => Some(player_2.pubkey()),
+            GameState::Settled { player_2, .. } => Some(player_2.pubkey()),
+            _ => None,
         }
     }
 }

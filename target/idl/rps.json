@@ -16,37 +16,12 @@
           "isSigner": true
         },
         {
-          "name": "mint",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "playerTokenAccount",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
           "name": "gameAuthority",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "escrowTokenAccount",
           "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tokenProgram",
-          "isMut": false,
           "isSigner": false
         },
         {
           "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "associatedTokenProgram",
           "isMut": false,
           "isSigner": false
         }
@@ -96,22 +71,12 @@
           "isSigner": false
         },
         {
-          "name": "playerTokenAccount",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
           "name": "gameAuthority",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "escrowTokenAccount",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tokenProgram",
+          "name": "systemProgram",
           "isMut": false,
           "isSigner": false
         }
@@ -141,7 +106,7 @@
         },
         {
           "name": "player",
-          "isMut": true,
+          "isMut": false,
           "isSigner": true
         }
       ],
@@ -186,27 +151,22 @@
           "isSigner": false
         },
         {
-          "name": "player1TokenAccount",
+          "name": "player1",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "player2TokenAccount",
+          "name": "player2",
           "isMut": true,
           "isSigner": false
         },
         {
           "name": "gameAuthority",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "escrowTokenAccount",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tokenProgram",
+          "name": "systemProgram",
           "isMut": false,
           "isSigner": false
         }
@@ -227,17 +187,17 @@
           "isSigner": false
         },
         {
-          "name": "escrowTokenAccount",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
           "name": "cleaner",
           "isMut": true,
           "isSigner": true
         },
         {
-          "name": "tokenProgram",
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "rpsProgram",
           "isMut": false,
           "isSigner": false
         }
@@ -256,6 +216,10 @@
             "type": "u64"
           },
           {
+            "name": "wagerAmount",
+            "type": "u64"
+          },
+          {
             "name": "state",
             "type": {
               "defined": "GameState"
@@ -271,14 +235,6 @@
       "type": {
         "kind": "struct",
         "fields": [
-          {
-            "name": "wagerAmount",
-            "type": "u64"
-          },
-          {
-            "name": "mint",
-            "type": "publicKey"
-          },
           {
             "name": "entryProof",
             "type": {
@@ -569,5 +525,8 @@
         ]
       }
     }
-  ]
+  ],
+  "metadata": {
+    "address": "rpsx2U29nY4LQmzw9kdvc7sgDBYK8N2UXpex3SJofuX"
+  }
 }

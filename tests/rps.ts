@@ -35,6 +35,7 @@ describe("rps", () => {
   it("Is initialized!", async () => {
     const player = anchor.web3.Keypair.generate();
     const gameSeed = new BN(10);
+    const wagerAmount = new BN(1000000);
     const [game, _gameBump] = PublicKey.findProgramAddressSync(
       [
         Buffer.from(anchor.utils.bytes.utf8.encode("game")),
@@ -53,29 +54,6 @@ describe("rps", () => {
       )
     );
 
-    const mintAuthority = anchor.web3.Keypair.generate();
-    const mint = await createMint(
-      provider.connection,
-      player,
-      mintAuthority.publicKey,
-      null,
-      0
-    );
-    const tokenAccount = await createAccount(
-      provider.connection,
-      player,
-      mint,
-      player.publicKey
-    );
-    await mintTo(
-      provider.connection,
-      player,
-      mint,
-      tokenAccount,
-      mintAuthority,
-      10
-    );
-
     // const acc = await getAccount(provider.connection, tokenAccount);
     // console.log("Token account ", acc);
 
@@ -83,14 +61,6 @@ describe("rps", () => {
       PublicKey.findProgramAddressSync(
         [
           Buffer.from(anchor.utils.bytes.utf8.encode("authority")),
-          game.toBuffer(),
-        ],
-        program.programId
-      );
-    const [escrowTokenAccount, _escrowTokenAccountBump] =
-      PublicKey.findProgramAddressSync(
-        [
-          Buffer.from(anchor.utils.bytes.utf8.encode("escrow")),
           game.toBuffer(),
         ],
         program.programId
@@ -104,20 +74,15 @@ describe("rps", () => {
     let commitment = Buffer.from(keccak_256(buf), "hex");
 
     const tx = await program.methods
-      .createGame(gameSeed, commitment.toJSON().data, new BN(10), null)
+      .createGame(gameSeed, commitment.toJSON().data, wagerAmount, null)
       .accounts({
         game: game,
         player: player.publicKey,
-        mint: mint,
-        playerTokenAccount: tokenAccount,
         gameAuthority: gameAuthority,
-        escrowTokenAccount: escrowTokenAccount,
-        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       })
       .signers([player])
-      .rpc();
+      .rpc({ skipPreflight: true });
 
     console.log("Your transaction signature", tx);
 
@@ -132,30 +97,12 @@ describe("rps", () => {
       )
     );
 
-    const tokenAccount2 = await createAccount(
-      provider.connection,
-      player2,
-      mint,
-      player2.publicKey
-    );
-    await mintTo(
-      provider.connection,
-      player2,
-      mint,
-      tokenAccount2,
-      mintAuthority,
-      10
-    );
-
     const tx2 = await program.methods
       .joinGame({ rock: {} }, null)
       .accounts({
         player: player2.publicKey,
         game: game,
-        playerTokenAccount: tokenAccount2,
         gameAuthority: gameAuthority,
-        escrowTokenAccount: escrowTokenAccount,
-        tokenProgram: TOKEN_PROGRAM_ID,
       })
       .signers([player2])
       .rpc({ skipPreflight: true });
@@ -180,19 +127,14 @@ describe("rps", () => {
       .settleGame()
       .accounts({
         game: game,
-        player1TokenAccount: tokenAccount,
-        player2TokenAccount: tokenAccount2,
+        player1: player.publicKey,
+        player2: player2.publicKey,
         gameAuthority: gameAuthority,
-        escrowTokenAccount: escrowTokenAccount,
-        tokenProgram: TOKEN_PROGRAM_ID,
       })
       .rpc({ skipPreflight: true });
 
     const gameAccount4 = await program.account.game.fetch(game);
     console.log("Your game account", JSON.stringify(gameAccount4));
-
-    const acc = await getAccount(provider.connection, tokenAccount);
-    console.log("Token account amount", acc.amount);
 
     const cleaner = anchor.web3.Keypair.generate();
     await provider.connection.confirmTransaction(
@@ -210,9 +152,8 @@ describe("rps", () => {
       .accounts({
         game: game,
         gameAuthority: gameAuthority,
-        escrowTokenAccount: escrowTokenAccount,
-        tokenProgram: TOKEN_PROGRAM_ID,
         cleaner: cleaner.publicKey,
+        rpsProgram: program.programId,
       })
       .signers([cleaner])
       .rpc({ skipPreflight: true });
