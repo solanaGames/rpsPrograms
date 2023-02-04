@@ -5,7 +5,7 @@ use logic::{process_action, Actions, GameConfig, GameState, Winner, RPS};
 use program::Rps;
 use serde::{Deserialize, Serialize};
 
-declare_id!("rpsx2U29nY4LQmzw9kdvc7sgDBYK8N2UXpex3SJofuX");
+declare_id!("rpskpFCUxMTf7uRHBWydZvVGH3J5C37qmbzQHXbBE6j");
 
 pub mod game_cleaner {
     solana_program::declare_id!("rcxrvoLEpa65dqqRVEqAADicpNnhWBwtWtzyFHZMzKW");
