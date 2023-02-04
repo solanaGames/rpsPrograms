@@ -402,7 +402,7 @@ pub struct Game {
 impl Game {
     pub fn space() -> usize {
         // idk lmao
-        232
+        192
     }
     pub fn player_1(self) -> Option<Pubkey> {
         match self.state {
