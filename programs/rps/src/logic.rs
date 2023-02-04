@@ -149,7 +149,7 @@ pub fn process_action(
                 config,
             },
         ) => {
-            msg!("{:?}", commitment);
+            // msg!("{:?}", commitment);
             GameState::AcceptingChallenge {
                 config,
                 player_1: PlayerState::Committed { pubkey, commitment },

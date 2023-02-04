@@ -526,6 +526,28 @@
       }
     }
   ],
+  "events": [
+    {
+      "name": "GameStartEvent",
+      "fields": [
+        {
+          "name": "gamePubkey",
+          "type": "publicKey",
+          "index": false
+        },
+        {
+          "name": "wagerAmount",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "public",
+          "type": "bool",
+          "index": false
+        }
+      ]
+    }
+  ],
   "metadata": {
     "address": "rpsx2U29nY4LQmzw9kdvc7sgDBYK8N2UXpex3SJofuX"
   }

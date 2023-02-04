@@ -61,6 +61,11 @@ pub mod rps {
             _ => panic!("Invalid state"),
         };
 
+        emit!(GameStartEvent{
+            game_pubkey: ctx.accounts.game.key(),
+            wager_amount: wager_amount,
+            public: entry_proof.is_some(),
+        });
         Ok(())
     }
 
@@ -144,7 +149,7 @@ pub mod rps {
                 config: _,
             } => match result {
                 Winner::P1 => {
-                    // if game expired they just get wager back
+                    // if game expired they just get wager_amount back
                     let payout_amount = if player_1.pubkey() == player_2.pubkey() {
                         ctx.accounts.game.wager_amount
                     } else {
@@ -230,7 +235,7 @@ pub mod rps {
                 player_2,
                 config: GameConfig { entry_proof },
             } => {
-                let gr = GameEvent {
+                let gr = ReadableGameEvent {
                     event_name: "game_result".to_string(),
                     event_version: 1,
                     player_1: player_1.pubkey().to_string(),
@@ -238,7 +243,7 @@ pub mod rps {
                     player_2: player_2.pubkey().to_string(),
                     choice_2: player_2.choice_or_unrevealed(),
                     result: result,
-                    wager: ctx.accounts.game.wager_amount,
+                    wager_amount: ctx.accounts.game.wager_amount,
                     public: entry_proof.is_none(),
                 };
                 msg!("{}", serde_json::to_string(&gr).unwrap());
@@ -252,7 +257,7 @@ pub mod rps {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct GameEvent {
+pub struct ReadableGameEvent {
     event_name: String,
     event_version: u64,
     player_1: String,
@@ -260,7 +265,14 @@ pub struct GameEvent {
     player_2: String,
     choice_2: Option<RPS>,
     result: Winner,
-    wager: u64,
+    wager_amount: u64,
+    public: bool,
+}
+
+#[event]
+pub struct GameStartEvent {
+    game_pubkey: Pubkey,
+    wager_amount: u64,
     public: bool,
 }
 

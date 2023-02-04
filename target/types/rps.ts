@@ -525,6 +525,28 @@ export type Rps = {
         ]
       }
     }
+  ],
+  "events": [
+    {
+      "name": "GameStartEvent",
+      "fields": [
+        {
+          "name": "gamePubkey",
+          "type": "publicKey",
+          "index": false
+        },
+        {
+          "name": "wagerAmount",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "public",
+          "type": "bool",
+          "index": false
+        }
+      ]
+    }
   ]
 };
 
@@ -1054,6 +1076,28 @@ export const IDL: Rps = {
           }
         ]
       }
+    }
+  ],
+  "events": [
+    {
+      "name": "GameStartEvent",
+      "fields": [
+        {
+          "name": "gamePubkey",
+          "type": "publicKey",
+          "index": false
+        },
+        {
+          "name": "wagerAmount",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "public",
+          "type": "bool",
+          "index": false
+        }
+      ]
     }
   ]
 };
