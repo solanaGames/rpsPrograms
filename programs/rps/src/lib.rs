@@ -14,6 +14,8 @@ pub mod local_bpf_loader {
     solana_program::declare_id!("BPFLoader2111111111111111111111111111111111");
 }
 
+static PLAYER_1_FEE_BPS: u64 = 350;
+
 #[program]
 pub mod rps {
     use super::*;
@@ -38,6 +40,11 @@ pub mod rps {
 
         ctx.accounts.game.seed = game_seed;
         ctx.accounts.game.wager_amount = wager_amount;
+        ctx.accounts.game.fee_amount = wager_amount
+            .checked_mul(PLAYER_1_FEE_BPS)
+            .ok_or(RpsError::BetTooLarge)?
+            .checked_div(10000)
+            .ok_or(RpsError::BetTooLarge)?;
         ctx.accounts.game.state = process_action(
             ctx.accounts.game.key(),
             ctx.accounts.game.state,
@@ -55,15 +62,16 @@ pub mod rps {
                             to: ctx.accounts.game_authority.to_account_info(),
                         },
                     ),
-                    wager_amount,
+                    wager_amount + ctx.accounts.game.fee_amount,
                 )?;
             }
             _ => panic!("Invalid state"),
         };
 
-        emit!(GameStartEvent{
+        emit!(GameStartEvent {
             game_pubkey: ctx.accounts.game.key(),
             wager_amount: wager_amount,
+            fee_amount: ctx.accounts.game.fee_amount,
             public: entry_proof.is_some(),
         });
         Ok(())
@@ -166,7 +174,7 @@ pub mod rps {
                                 b"authority".as_ref(),
                                 ctx.accounts.game.key().as_ref(),
                                 &[*ctx.bumps.get("game_authority").unwrap()],
-                            ]]
+                            ]],
                         ),
                         payout_amount,
                     )?;
@@ -183,7 +191,7 @@ pub mod rps {
                                 b"authority".as_ref(),
                                 ctx.accounts.game.key().as_ref(),
                                 &[*ctx.bumps.get("game_authority").unwrap()],
-                            ]]
+                            ]],
                         ),
                         ctx.accounts.game.wager_amount * 2,
                     )?;
@@ -200,7 +208,7 @@ pub mod rps {
                                 b"authority".as_ref(),
                                 ctx.accounts.game.key().as_ref(),
                                 &[*ctx.bumps.get("game_authority").unwrap()],
-                            ]]
+                            ]],
                         ),
                         ctx.accounts.game.wager_amount,
                     )?;
@@ -215,7 +223,7 @@ pub mod rps {
                                 b"authority".as_ref(),
                                 ctx.accounts.game.key().as_ref(),
                                 &[*ctx.bumps.get("game_authority").unwrap()],
-                            ]]
+                            ]],
                         ),
                         ctx.accounts.game.wager_amount,
                     )?;
@@ -235,6 +243,22 @@ pub mod rps {
                 player_2,
                 config: GameConfig { entry_proof },
             } => {
+                anchor_lang::system_program::transfer(
+                    CpiContext::new_with_signer(
+                        ctx.accounts.system_program.to_account_info(),
+                        anchor_lang::system_program::Transfer {
+                            from: ctx.accounts.game_authority.to_account_info(),
+                            to: ctx.accounts.cleaner.to_account_info(),
+                        },
+                        &[&[
+                            b"authority".as_ref(),
+                            ctx.accounts.game.key().as_ref(),
+                            &[*ctx.bumps.get("game_authority").unwrap()],
+                        ]],
+                    ),
+                    ctx.accounts.game.fee_amount,
+                )?;
+
                 let gr = ReadableGameEvent {
                     event_name: "game_result".to_string(),
                     event_version: 1,
@@ -244,6 +268,7 @@ pub mod rps {
                     choice_2: player_2.choice_or_unrevealed(),
                     result: result,
                     wager_amount: ctx.accounts.game.wager_amount,
+                    fee_amount: ctx.accounts.game.fee_amount,
                     public: entry_proof.is_none(),
                 };
                 msg!("{}", serde_json::to_string(&gr).unwrap());
@@ -266,6 +291,7 @@ pub struct ReadableGameEvent {
     choice_2: Option<RPS>,
     result: Winner,
     wager_amount: u64,
+    fee_amount: u64,
     public: bool,
 }
 
@@ -273,6 +299,7 @@ pub struct ReadableGameEvent {
 pub struct GameStartEvent {
     game_pubkey: Pubkey,
     wager_amount: u64,
+    fee_amount: u64,
     public: bool,
 }
 
@@ -387,15 +414,17 @@ pub struct CleanGame<'info> {
     pub cleaner: Signer<'info>,
 
     pub system_program: Program<'info, System>,
-    
-    pub rps_program: Program<'info, Rps>
+
+    pub rps_program: Program<'info, Rps>,
 }
 
+// #[account(zero_copy(unsafe))]
 #[account]
 #[derive(Debug, PartialEq, Eq, Copy)]
 pub struct Game {
     pub seed: u64,
     pub wager_amount: u64,
+    pub fee_amount: u64,
     pub state: GameState,
 }
 
@@ -421,4 +450,10 @@ impl Game {
             _ => None,
         }
     }
+}
+
+#[error_code]
+pub enum RpsError {
+    #[msg("Bet too large")]
+    BetTooLarge,
 }

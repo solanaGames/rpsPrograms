@@ -6,26 +6,15 @@ import {
   Connection,
   Commitment,
 } from "@solana/web3.js";
-import { Program } from "@coral-xyz/anchor";
 import { Rps } from "../target/types/rps";
 import { BN } from "bn.js";
 import { keccak_256 } from "js-sha3";
-
-import {
-  TOKEN_PROGRAM_ID,
-  createMint,
-  createAccount,
-  mintTo,
-  getAccount,
-  getAssociatedTokenAddress,
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-} from "@solana/spl-token";
 
 describe("rps", () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.AnchorProvider.env());
 
-  const program = anchor.workspace.Rps as Program<Rps>;
+  const program = anchor.workspace.Rps as anchor.Program<Rps>;
 
   const LAMPORTS_PER_SOL = new BN(1000000000);
   const WRAPPED_SOL_MINT = new anchor.web3.PublicKey(
