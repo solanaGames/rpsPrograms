@@ -352,7 +352,7 @@ name = "blp"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
- "spl-token",
+ "anchor-spl",
 ]
 
 [[package]]

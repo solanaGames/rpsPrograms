@@ -21,6 +21,12 @@ pub mod rps {
     use super::*;
     use crate::logic::RPS;
 
+    pub fn create_player_info(ctx: Context<CreatePlayerInfo>){
+        ctx.accounts.player_info.owner = ctx.accounts.owner.key();
+
+        Ok(())
+    }
+
     pub fn create_game(
         ctx: Context<CreateGame>,
         game_seed: u64,
@@ -304,6 +310,24 @@ pub struct GameStartEvent {
 }
 
 #[derive(Accounts)]
+pub struct CreatePlayerInfo<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    #[account(
+        init,
+        seeds = [b"player_info".as_ref(), owner.key().as_ref()],
+        bump,
+        payer = owner,
+        space = PlayerInfo::space()
+    )]
+    pub player_info: Account<'info, PlayerInfo>,
+
+    pub system_program: Program<'info, System>,
+}
+
+
+#[derive(Accounts)]
 #[instruction(game_seed: u64)]
 pub struct CreateGame<'info> {
     #[account(
@@ -451,6 +475,27 @@ impl Game {
         }
     }
 }
+
+
+#[account]
+pub struct PlayerInfo {
+    pub owner: Pubkey,
+    pub games_won: u64,
+    pub games_drawn:u64,
+    pub games_lost: u64,
+
+    pub lifetime_earnings: i64,
+
+    pub amount_in_games: u64,
+}
+
+impl PlayerInfo {
+    pub fn space() -> usize {
+        // idk lmao
+        100
+    }
+}
+
 
 #[error_code]
 pub enum RpsError {
