@@ -21,7 +21,7 @@ pub mod rps {
     use super::*;
     use crate::logic::RPS;
 
-    pub fn create_player_info(ctx: Context<CreatePlayerInfo>){
+    pub fn create_player_info(ctx: Context<CreatePlayerInfo>) -> Result<()> {
         ctx.accounts.player_info.owner = ctx.accounts.owner.key();
 
         Ok(())
@@ -74,6 +74,20 @@ pub mod rps {
             _ => panic!("Invalid state"),
         };
 
+        ctx.accounts.player_info.amount_in_games = ctx
+            .accounts
+            .player_info
+            .amount_in_games
+            .checked_add(ctx.accounts.game.wager_amount)
+            .ok_or(RpsError::BetTooLarge)?;
+
+        ctx.accounts.player_info.lifetime_wagering = ctx
+            .accounts
+            .player_info
+            .lifetime_wagering
+            .checked_add(ctx.accounts.game.wager_amount)
+            .ok_or(RpsError::BetTooLarge)?;
+
         emit!(GameStartEvent {
             game_pubkey: ctx.accounts.game.key(),
             wager_amount: wager_amount,
@@ -112,6 +126,19 @@ pub mod rps {
             }
             _ => panic!("Invalid state"),
         };
+
+        ctx.accounts.player_info.amount_in_games = ctx
+            .accounts
+            .player_info
+            .amount_in_games
+            .checked_add(ctx.accounts.game.wager_amount)
+            .ok_or(RpsError::BetTooLarge)?;
+        ctx.accounts.player_info.lifetime_wagering = ctx
+            .accounts
+            .player_info
+            .lifetime_wagering
+            .checked_add(ctx.accounts.game.wager_amount)
+            .ok_or(RpsError::BetTooLarge)?;
 
         Ok(())
     }
@@ -155,6 +182,20 @@ pub mod rps {
             Clock::get()?.slot,
         );
 
+        ctx.accounts.player_1_info.amount_in_games = ctx
+            .accounts
+            .player_1_info
+            .amount_in_games
+            .checked_sub(ctx.accounts.game.wager_amount)
+            .ok_or(RpsError::MathOverflow)?;
+
+        ctx.accounts.player_2_info.amount_in_games = ctx
+            .accounts
+            .player_2_info
+            .amount_in_games
+            .checked_sub(ctx.accounts.game.wager_amount)
+            .ok_or(RpsError::MathOverflow)?;
+
         match ctx.accounts.game.state {
             GameState::Settled {
                 result,
@@ -184,6 +225,32 @@ pub mod rps {
                         ),
                         payout_amount,
                     )?;
+
+                    ctx.accounts.player_1_info.games_won = ctx
+                        .accounts
+                        .player_1_info
+                        .games_won
+                        .checked_add(1)
+                        .ok_or(RpsError::MathOverflow)?;
+                    ctx.accounts.player_1_info.lifetime_earnings = ctx
+                        .accounts
+                        .player_1_info
+                        .lifetime_earnings
+                        .checked_add_unsigned(ctx.accounts.game.wager_amount)
+                        .ok_or(RpsError::MathOverflow)?;
+
+                    ctx.accounts.player_2_info.games_lost = ctx
+                        .accounts
+                        .player_2_info
+                        .games_lost
+                        .checked_add(1)
+                        .ok_or(RpsError::MathOverflow)?;
+                    ctx.accounts.player_2_info.lifetime_earnings = ctx
+                        .accounts
+                        .player_2_info
+                        .lifetime_earnings
+                        .checked_sub_unsigned(ctx.accounts.game.wager_amount)
+                        .ok_or(RpsError::MathOverflow)?;
                 }
                 Winner::P2 => {
                     anchor_lang::system_program::transfer(
@@ -201,6 +268,32 @@ pub mod rps {
                         ),
                         ctx.accounts.game.wager_amount * 2,
                     )?;
+
+                    ctx.accounts.player_1_info.games_lost = ctx
+                        .accounts
+                        .player_1_info
+                        .games_lost
+                        .checked_add(1)
+                        .ok_or(RpsError::MathOverflow)?;
+                    ctx.accounts.player_1_info.lifetime_earnings = ctx
+                        .accounts
+                        .player_1_info
+                        .lifetime_earnings
+                        .checked_sub_unsigned(ctx.accounts.game.wager_amount)
+                        .ok_or(RpsError::MathOverflow)?;
+
+                    ctx.accounts.player_2_info.games_won = ctx
+                        .accounts
+                        .player_2_info
+                        .games_won
+                        .checked_add(1)
+                        .ok_or(RpsError::MathOverflow)?;
+                    ctx.accounts.player_2_info.lifetime_earnings = ctx
+                        .accounts
+                        .player_2_info
+                        .lifetime_earnings
+                        .checked_add_unsigned(ctx.accounts.game.wager_amount)
+                        .ok_or(RpsError::MathOverflow)?;
                 }
                 Winner::TIE => {
                     anchor_lang::system_program::transfer(
@@ -233,6 +326,19 @@ pub mod rps {
                         ),
                         ctx.accounts.game.wager_amount,
                     )?;
+                    ctx.accounts.player_1_info.games_drawn = ctx
+                        .accounts
+                        .player_1_info
+                        .games_drawn
+                        .checked_add(1)
+                        .ok_or(RpsError::MathOverflow)?;
+
+                    ctx.accounts.player_2_info.games_drawn = ctx
+                        .accounts
+                        .player_2_info
+                        .games_drawn
+                        .checked_add(1)
+                        .ok_or(RpsError::MathOverflow)?;
                 }
             },
             _ => panic!("Invalid state"),
@@ -326,7 +432,6 @@ pub struct CreatePlayerInfo<'info> {
     pub system_program: Program<'info, System>,
 }
 
-
 #[derive(Accounts)]
 #[instruction(game_seed: u64)]
 pub struct CreateGame<'info> {
@@ -342,6 +447,13 @@ pub struct CreateGame<'info> {
     #[account(mut)]
     pub player: Signer<'info>,
 
+    #[account(
+        seeds = [b"player_info".as_ref(), player.key().as_ref()],
+        bump,
+        constraint = player_info.owner == player.key()
+    )]
+    pub player_info: Account<'info, PlayerInfo>,
+
     /// CHECK: this is a pda that manages the escrow account
     #[account(mut, seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
     pub game_authority: AccountInfo<'info>,
@@ -353,6 +465,13 @@ pub struct CreateGame<'info> {
 pub struct JoinGame<'info> {
     #[account(mut)]
     player: Signer<'info>,
+
+    #[account(
+        seeds = [b"player_info".as_ref(), player.key().as_ref()],
+        bump,
+        constraint = player_info.owner == player.key()
+    )]
+    pub player_info: Account<'info, PlayerInfo>,
 
     #[account(
         mut,
@@ -379,6 +498,13 @@ pub struct RevealGame<'info> {
 
     #[account(constraint = Some(player.key()) == game.player_1() || Some(player.key()) == game.player_2())]
     pub player: Signer<'info>,
+
+    #[account(
+        seeds = [b"player_info".as_ref(), player.key().as_ref()],
+        bump,
+        constraint = player_info.owner == player.key()
+    )]
+    pub player_info: Account<'info, PlayerInfo>,
 }
 
 #[derive(Accounts)]
@@ -394,6 +520,13 @@ pub struct ExpireGame<'info> {
     /// checked in the game logic code so this doesn't need to be a signer
     #[account(constraint = Some(player.key()) == game.player_1() || Some(player.key()) == game.player_2())]
     pub player: AccountInfo<'info>,
+
+    #[account(
+        seeds = [b"player_info".as_ref(), player.key().as_ref()],
+        bump,
+        constraint = player_info.owner == player.key()
+    )]
+    pub player_info: Account<'info, PlayerInfo>,
 }
 
 #[derive(Accounts)]
@@ -408,10 +541,22 @@ pub struct SettleGame<'info> {
     /// CHECK: how do i make this check that it's the one in the enum lmao?
     #[account(mut, constraint = Some(player_1.key()) == game.player_1())]
     pub player_1: AccountInfo<'info>,
+    #[account(
+        seeds = [b"player_info".as_ref(), player_1.key().as_ref()],
+        bump,
+        constraint = player_1_info.owner == player_1.key()
+    )]
+    pub player_1_info: Account<'info, PlayerInfo>,
 
     /// CHECK:
     #[account(mut, constraint = Some(player_2.key()) == game.player_2())]
     pub player_2: AccountInfo<'info>,
+    #[account(
+        seeds = [b"player_info".as_ref(), player_2.key().as_ref()],
+        bump,
+        constraint = player_2_info.owner == player_2.key()
+    )]
+    pub player_2_info: Account<'info, PlayerInfo>,
 
     /// CHECK: this is a pda that manages the escrow account
     #[account(mut, seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
@@ -476,14 +621,14 @@ impl Game {
     }
 }
 
-
 #[account]
 pub struct PlayerInfo {
     pub owner: Pubkey,
     pub games_won: u64,
-    pub games_drawn:u64,
+    pub games_drawn: u64,
     pub games_lost: u64,
 
+    pub lifetime_wagering: u64,
     pub lifetime_earnings: i64,
 
     pub amount_in_games: u64,
@@ -496,9 +641,10 @@ impl PlayerInfo {
     }
 }
 
-
 #[error_code]
 pub enum RpsError {
     #[msg("Bet too large")]
     BetTooLarge,
+    #[msg("Math Overflow")]
+    MathOverflow,
 }
