@@ -113,6 +113,7 @@ pub mod rps {
 
         match ctx.accounts.game.state {
             GameState::AcceptingReveal { .. } => {
+                // transfer in the wager
                 anchor_lang::system_program::transfer(
                     CpiContext::new(
                         ctx.accounts.system_program.to_account_info(),
@@ -122,6 +123,22 @@ pub mod rps {
                         },
                     ),
                     ctx.accounts.game.wager_amount,
+                )?;
+                // transfer out the fee
+                anchor_lang::system_program::transfer(
+                    CpiContext::new_with_signer(
+                        ctx.accounts.system_program.to_account_info(),
+                        anchor_lang::system_program::Transfer {
+                            from: ctx.accounts.game_authority.to_account_info(),
+                            to: ctx.accounts.player.to_account_info(),
+                        },
+                        &[&[
+                            b"authority".as_ref(),
+                            ctx.accounts.game.key().as_ref(),
+                            &[*ctx.bumps.get("game_authority").unwrap()],
+                        ]],
+                    ),
+                    ctx.accounts.game.fee_amount,
                 )?;
             }
             _ => panic!("Invalid state"),
@@ -355,21 +372,22 @@ pub mod rps {
                 player_2,
                 config: GameConfig { entry_proof },
             } => {
-                anchor_lang::system_program::transfer(
-                    CpiContext::new_with_signer(
-                        ctx.accounts.system_program.to_account_info(),
-                        anchor_lang::system_program::Transfer {
-                            from: ctx.accounts.game_authority.to_account_info(),
-                            to: ctx.accounts.cleaner.to_account_info(),
-                        },
-                        &[&[
-                            b"authority".as_ref(),
-                            ctx.accounts.game.key().as_ref(),
-                            &[*ctx.bumps.get("game_authority").unwrap()],
-                        ]],
-                    ),
-                    ctx.accounts.game.fee_amount,
-                )?;
+                // fee just goes to player2 now
+                // anchor_lang::system_program::transfer(
+                //     CpiContext::new_with_signer(
+                //         ctx.accounts.system_program.to_account_info(),
+                //         anchor_lang::system_program::Transfer {
+                //             from: ctx.accounts.game_authority.to_account_info(),
+                //             to: ctx.accounts.cleaner.to_account_info(),
+                //         },
+                //         &[&[
+                //             b"authority".as_ref(),
+                //             ctx.accounts.game.key().as_ref(),
+                //             &[*ctx.bumps.get("game_authority").unwrap()],
+                //         ]],
+                //     ),
+                //     ctx.accounts.game.fee_amount,
+                // )?;
 
                 let gr = ReadableGameEvent {
                     event_name: "game_result".to_string(),
@@ -569,7 +587,7 @@ pub struct SettleGame<'info> {
 pub struct CleanGame<'info> {
     #[account(
         mut,
-        close = cleaner,
+        close = player_1,
         seeds = [b"game".as_ref(), &game.seed.to_le_bytes()],
         bump,
     )]
@@ -579,8 +597,12 @@ pub struct CleanGame<'info> {
     #[account(seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
     pub game_authority: AccountInfo<'info>,
 
-    #[account(mut, constraint = (&local_bpf_loader::id() == &rps_program.owner.key() || &game_cleaner::id() == &cleaner.key()))]
-    pub cleaner: Signer<'info>,
+    // #[account(mut, constraint = (&local_bpf_loader::id() == &rps_program.owner.key() || &game_cleaner::id() == &cleaner.key()))]
+    // pub cleaner: Signer<'info>,
+    // #[account(mut)]
+    // pub cleaner: Signer<'info>,
+    #[account(mut, constraint = Some(player_1.key()) == game.player_1())]
+    pub player_1: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,
 
@@ -636,8 +658,8 @@ pub struct PlayerInfo {
 
 impl PlayerInfo {
     pub fn space() -> usize {
-        // idk lmao
-        100
+        // idk lmao leaving some space for expansion
+        420
     }
 }
 
