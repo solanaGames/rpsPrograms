@@ -1,3 +1,4 @@
+#![allow(clippy::result_large_err)]
 use anchor_lang::prelude::*;
 use anchor_spl::token::*;
 
@@ -9,19 +10,12 @@ use rps::{self, Game, PlayerInfo};
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
-const POOL_SEED: &'static [u8; 4] = b"pool";
-const AUTHORITY_SEED: &'static [u8; 9] = b"authority";
-const MINT_SEED: &'static [u8; 4] = b"mint";
+const POOL_SEED: &[u8; 4] = b"pool";
+const AUTHORITY_SEED: &[u8; 9] = b"authority";
+const MINT_SEED: &[u8; 4] = b"mint";
 
 #[program]
 pub mod blp {
-    use anchor_spl::token::{
-        burn, initialize_mint2,
-        spl_token::instruction::{burn, mint_to_checked},
-        InitializeMint2,
-    };
-    use rps::cpi::join_game;
-
     use super::*;
 
     pub fn create_pool(ctx: Context<CreatePool>, seed: u64) -> Result<()> {
@@ -75,7 +69,7 @@ pub mod blp {
                 .unwrap();
         } else if lp_total == 0 {
             // first deposit so have rate be 1
-            mint_amount_u128 = (deposit_amount as u128);
+            mint_amount_u128 = deposit_amount as u128;
         } else {
             panic!("pool blew up no deposits allowed");
         }
@@ -192,6 +186,7 @@ pub struct CreatePool<'info> {
     )]
     pub pool: Account<'info, Pool>,
 
+    /// CHECK: this a pda for the pool
     #[account(mut, seeds = [AUTHORITY_SEED.as_ref(), pool.key().as_ref()], bump)]
     pub pool_authority: AccountInfo<'info>,
 
@@ -223,6 +218,7 @@ pub struct Deposit<'info> {
     )]
     pub pool: Account<'info, Pool>,
 
+    /// CHECK: this pda for the pool
     #[account(mut, seeds = [AUTHORITY_SEED.as_ref(), pool.key().as_ref()], bump)]
     pub pool_authority: AccountInfo<'info>,
 
@@ -259,6 +255,7 @@ pub struct Withdraw<'info> {
     )]
     pub pool: Account<'info, Pool>,
 
+    /// CHECK: this pda for the pool
     #[account(mut, seeds = [AUTHORITY_SEED.as_ref(), pool.key().as_ref()], bump)]
     pub pool_authority: AccountInfo<'info>,
 
@@ -295,6 +292,7 @@ pub struct BotPlay<'info> {
     )]
     pub pool: Account<'info, Pool>,
 
+    /// CHECK: this pda for the pool
     #[account(mut, seeds = [AUTHORITY_SEED.as_ref(), pool.key().as_ref()], bump)]
     pub pool_authority: AccountInfo<'info>,
 
@@ -313,6 +311,7 @@ pub struct BotPlay<'info> {
         bump,
     )]
     pub game: Account<'info, Game>,
+    /// CHECK: pda for the game account
     #[account(mut, seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
     pub game_authority: AccountInfo<'info>,
 

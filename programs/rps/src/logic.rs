@@ -317,7 +317,7 @@ pub fn process_action(
             config,
         },
 
-        _ => panic!("Invalid (state, action) pair: {:#?} {:#?}", state, action),
+        _ => panic!("Invalid (state, action) pair: {state:#?} {action:#?}"),
     }
 }
 

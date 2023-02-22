@@ -3,6 +3,27 @@ export type Rps = {
   "name": "rps",
   "instructions": [
     {
+      "name": "createPlayerInfo",
+      "accounts": [
+        {
+          "name": "owner",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "playerInfo",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "createGame",
       "accounts": [
         {
@@ -14,6 +35,11 @@ export type Rps = {
           "name": "player",
           "isMut": true,
           "isSigner": true
+        },
+        {
+          "name": "playerInfo",
+          "isMut": false,
+          "isSigner": false
         },
         {
           "name": "gameAuthority",
@@ -66,6 +92,11 @@ export type Rps = {
           "isSigner": true
         },
         {
+          "name": "playerInfo",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
           "name": "game",
           "isMut": true,
           "isSigner": false
@@ -108,6 +139,11 @@ export type Rps = {
           "name": "player",
           "isMut": false,
           "isSigner": true
+        },
+        {
+          "name": "playerInfo",
+          "isMut": false,
+          "isSigner": false
         }
       ],
       "args": [
@@ -138,6 +174,11 @@ export type Rps = {
           "docs": [
             "checked in the game logic code so this doesn't need to be a signer"
           ]
+        },
+        {
+          "name": "playerInfo",
+          "isMut": false,
+          "isSigner": false
         }
       ],
       "args": []
@@ -156,8 +197,18 @@ export type Rps = {
           "isSigner": false
         },
         {
+          "name": "player1Info",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
           "name": "player2",
           "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "player2Info",
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -187,9 +238,9 @@ export type Rps = {
           "isSigner": false
         },
         {
-          "name": "cleaner",
+          "name": "player1",
           "isMut": true,
-          "isSigner": true
+          "isSigner": false
         },
         {
           "name": "systemProgram",
@@ -220,10 +271,50 @@ export type Rps = {
             "type": "u64"
           },
           {
+            "name": "feeAmount",
+            "type": "u64"
+          },
+          {
             "name": "state",
             "type": {
               "defined": "GameState"
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "playerInfo",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "publicKey"
+          },
+          {
+            "name": "gamesWon",
+            "type": "u64"
+          },
+          {
+            "name": "gamesDrawn",
+            "type": "u64"
+          },
+          {
+            "name": "gamesLost",
+            "type": "u64"
+          },
+          {
+            "name": "lifetimeWagering",
+            "type": "u64"
+          },
+          {
+            "name": "lifetimeEarnings",
+            "type": "i64"
+          },
+          {
+            "name": "amountInGames",
+            "type": "u64"
           }
         ]
       }
@@ -541,11 +632,28 @@ export type Rps = {
           "index": false
         },
         {
+          "name": "feeAmount",
+          "type": "u64",
+          "index": false
+        },
+        {
           "name": "public",
           "type": "bool",
           "index": false
         }
       ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "BetTooLarge",
+      "msg": "Bet too large"
+    },
+    {
+      "code": 6001,
+      "name": "MathOverflow",
+      "msg": "Math Overflow"
     }
   ]
 };
@@ -555,6 +663,27 @@ export const IDL: Rps = {
   "name": "rps",
   "instructions": [
     {
+      "name": "createPlayerInfo",
+      "accounts": [
+        {
+          "name": "owner",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "playerInfo",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "createGame",
       "accounts": [
         {
@@ -566,6 +695,11 @@ export const IDL: Rps = {
           "name": "player",
           "isMut": true,
           "isSigner": true
+        },
+        {
+          "name": "playerInfo",
+          "isMut": false,
+          "isSigner": false
         },
         {
           "name": "gameAuthority",
@@ -618,6 +752,11 @@ export const IDL: Rps = {
           "isSigner": true
         },
         {
+          "name": "playerInfo",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
           "name": "game",
           "isMut": true,
           "isSigner": false
@@ -660,6 +799,11 @@ export const IDL: Rps = {
           "name": "player",
           "isMut": false,
           "isSigner": true
+        },
+        {
+          "name": "playerInfo",
+          "isMut": false,
+          "isSigner": false
         }
       ],
       "args": [
@@ -690,6 +834,11 @@ export const IDL: Rps = {
           "docs": [
             "checked in the game logic code so this doesn't need to be a signer"
           ]
+        },
+        {
+          "name": "playerInfo",
+          "isMut": false,
+          "isSigner": false
         }
       ],
       "args": []
@@ -708,8 +857,18 @@ export const IDL: Rps = {
           "isSigner": false
         },
         {
+          "name": "player1Info",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
           "name": "player2",
           "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "player2Info",
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -739,9 +898,9 @@ export const IDL: Rps = {
           "isSigner": false
         },
         {
-          "name": "cleaner",
+          "name": "player1",
           "isMut": true,
-          "isSigner": true
+          "isSigner": false
         },
         {
           "name": "systemProgram",
@@ -772,10 +931,50 @@ export const IDL: Rps = {
             "type": "u64"
           },
           {
+            "name": "feeAmount",
+            "type": "u64"
+          },
+          {
             "name": "state",
             "type": {
               "defined": "GameState"
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "playerInfo",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "publicKey"
+          },
+          {
+            "name": "gamesWon",
+            "type": "u64"
+          },
+          {
+            "name": "gamesDrawn",
+            "type": "u64"
+          },
+          {
+            "name": "gamesLost",
+            "type": "u64"
+          },
+          {
+            "name": "lifetimeWagering",
+            "type": "u64"
+          },
+          {
+            "name": "lifetimeEarnings",
+            "type": "i64"
+          },
+          {
+            "name": "amountInGames",
+            "type": "u64"
           }
         ]
       }
@@ -1093,11 +1292,28 @@ export const IDL: Rps = {
           "index": false
         },
         {
+          "name": "feeAmount",
+          "type": "u64",
+          "index": false
+        },
+        {
           "name": "public",
           "type": "bool",
           "index": false
         }
       ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "BetTooLarge",
+      "msg": "Bet too large"
+    },
+    {
+      "code": 6001,
+      "name": "MathOverflow",
+      "msg": "Math Overflow"
     }
   ]
 };

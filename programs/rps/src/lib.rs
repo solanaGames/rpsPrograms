@@ -1,3 +1,4 @@
+#![allow(clippy::result_large_err)]
 use anchor_lang::prelude::*;
 pub mod logic;
 
@@ -39,9 +40,7 @@ pub mod rps {
         let action = Actions::CreateGame {
             player_1_pubkey: ctx.accounts.player.key(),
             commitment,
-            config: GameConfig {
-                entry_proof: entry_proof,
-            },
+            config: GameConfig { entry_proof },
         };
 
         ctx.accounts.game.seed = game_seed;
@@ -90,7 +89,7 @@ pub mod rps {
 
         emit!(GameStartEvent {
             game_pubkey: ctx.accounts.game.key(),
-            wager_amount: wager_amount,
+            wager_amount,
             fee_amount: ctx.accounts.game.fee_amount,
             public: entry_proof.is_some(),
         });
@@ -396,7 +395,7 @@ pub mod rps {
                     choice_1: player_1.choice_or_unrevealed(),
                     player_2: player_2.pubkey().to_string(),
                     choice_2: player_2.choice_or_unrevealed(),
-                    result: result,
+                    result,
                     wager_amount: ctx.accounts.game.wager_amount,
                     fee_amount: ctx.accounts.game.fee_amount,
                     public: entry_proof.is_none(),
@@ -601,6 +600,7 @@ pub struct CleanGame<'info> {
     // pub cleaner: Signer<'info>,
     // #[account(mut)]
     // pub cleaner: Signer<'info>,
+    /// CHECK: this is just the play1 account we check in the constraint i matches the one on the game
     #[account(mut, constraint = Some(player_1.key()) == game.player_1())]
     pub player_1: AccountInfo<'info>,
 
