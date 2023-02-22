@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-mod logic;
+pub mod logic;
 
 use logic::{process_action, Actions, GameConfig, GameState, Winner, RPS};
 use program::Rps;
@@ -253,7 +253,7 @@ pub mod rps {
                         .accounts
                         .player_1_info
                         .lifetime_earnings
-                        .checked_add_unsigned(ctx.accounts.game.wager_amount)
+                        .checked_add(ctx.accounts.game.wager_amount.try_into().unwrap())
                         .ok_or(RpsError::MathOverflow)?;
 
                     ctx.accounts.player_2_info.games_lost = ctx
@@ -266,7 +266,7 @@ pub mod rps {
                         .accounts
                         .player_2_info
                         .lifetime_earnings
-                        .checked_sub_unsigned(ctx.accounts.game.wager_amount)
+                        .checked_sub(ctx.accounts.game.wager_amount.try_into().unwrap())
                         .ok_or(RpsError::MathOverflow)?;
                 }
                 Winner::P2 => {
@@ -296,7 +296,7 @@ pub mod rps {
                         .accounts
                         .player_1_info
                         .lifetime_earnings
-                        .checked_sub_unsigned(ctx.accounts.game.wager_amount)
+                        .checked_sub(ctx.accounts.game.wager_amount.try_into().unwrap())
                         .ok_or(RpsError::MathOverflow)?;
 
                     ctx.accounts.player_2_info.games_won = ctx
@@ -309,7 +309,7 @@ pub mod rps {
                         .accounts
                         .player_2_info
                         .lifetime_earnings
-                        .checked_add_unsigned(ctx.accounts.game.wager_amount)
+                        .checked_add(ctx.accounts.game.wager_amount.try_into().unwrap())
                         .ok_or(RpsError::MathOverflow)?;
                 }
                 Winner::TIE => {

@@ -1,10 +1,11 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::*;
 
-use rps::cpi::accounts::CreatePlayerInfo;
-use rps::cpi::create_player_info;
+use rps::cpi::accounts::{CreatePlayerInfo, JoinGame};
+use rps::cpi::{create_player_info, join_game};
+use rps::logic::RPS;
 use rps::program::Rps;
-use rps::{self, PlayerInfo};
+use rps::{self, Game, PlayerInfo};
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
@@ -15,8 +16,11 @@ const MINT_SEED: &'static [u8; 4] = b"mint";
 #[program]
 pub mod blp {
     use anchor_spl::token::{
-        initialize_mint2, spl_token::instruction::mint_to_checked, InitializeMint2,
+        burn, initialize_mint2,
+        spl_token::instruction::{burn, mint_to_checked},
+        InitializeMint2,
     };
+    use rps::cpi::join_game;
 
     use super::*;
 
@@ -27,7 +31,7 @@ pub mod blp {
         ctx.accounts.pool.lp_token_mint = ctx.accounts.lp_token_mint.key();
 
         // creating lp token mint
-        initialize_mint2(
+        anchor_spl::token::initialize_mint2(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
                 InitializeMint2 {
@@ -77,7 +81,7 @@ pub mod blp {
         }
 
         let mint_amount = u64::try_from(mint_amount_u128).unwrap();
-        mint_to(
+        anchor_spl::token::mint_to(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
                 MintTo {
@@ -107,8 +111,8 @@ pub mod blp {
         Ok(())
     }
 
-    pub fn withdraw(ctx: Context<Withdraw>, withdraw_amount:u64) -> Result<()> {
-        let deposits = (ctx.accounts.pool_authority.to_account_info().lamports() as u128);
+    pub fn withdraw(ctx: Context<Withdraw>, withdraw_amount: u64) -> Result<()> {
+        let deposits = ctx.accounts.pool_authority.to_account_info().lamports() as u128;
         // not considering money in games because must assume lost all
         let lp_total = ctx.accounts.lp_token_mint.supply as u128;
         let sol_withdraw_amount_u128: u128;
@@ -123,15 +127,55 @@ pub mod blp {
         } else {
             panic!("no lp tokens outstanding");
         }
-        let sol_withdraw_amount = u64::try_from(sol_withdraw_amount_u128).unwrap();
 
-        // let deposits = (ctx.accounts.pool_authority.to_account_info().lamports() as u128);
-        // let lp_total = ctx.accounts.lp_token_mint.supply as u128;
+        let sol_withdraw_amount = u64::try_from(sol_withdraw_amount_u128).unwrap();
+        anchor_lang::system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: ctx.accounts.pool_authority.to_account_info(),
+                    to: ctx.accounts.user_authority.to_account_info(),
+                },
+                &[&[
+                    AUTHORITY_SEED.as_ref(),
+                    ctx.accounts.pool.key().as_ref(),
+                    &[*ctx.bumps.get("pool_authority").unwrap()],
+                ]],
+            ),
+            sol_withdraw_amount,
+        )?;
+
+        anchor_spl::token::burn(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Burn {
+                    mint: ctx.accounts.lp_token_mint.to_account_info(),
+                    from: ctx.accounts.user_lp_token_account.to_account_info(),
+                    authority: ctx.accounts.pool_authority.to_account_info(),
+                },
+            ),
+            withdraw_amount,
+        )?;
 
         Ok(())
     }
 
-    pub fn bot_play(ctx: Context<BotPlay>) -> Result<()> {
+    pub fn bot_play(ctx: Context<BotPlay>, choice: RPS) -> Result<()> {
+        join_game(
+            CpiContext::new(
+                ctx.accounts.rps_program.to_account_info(),
+                JoinGame {
+                    player: ctx.accounts.pool_authority.to_account_info(),
+                    player_info: ctx.accounts.pool_authority_player_info.to_account_info(),
+                    game: ctx.accounts.game.to_account_info(),
+                    game_authority: ctx.accounts.game_authority.to_account_info(),
+                    system_program: ctx.accounts.system_program.to_account_info(),
+                },
+            ),
+            choice,
+            None,
+        )?;
+
         Ok(())
     }
 }
@@ -227,11 +271,11 @@ pub struct Withdraw<'info> {
     )]
     pub lp_token_mint: Account<'info, Mint>,
 
-    // depositing from
+    // withdrawing to
     #[account(mut)]
     pub user_authority: Signer<'info>,
 
-    // where to mint lp tokens to
+    // where to burn lp tokens from
     #[account(
         mut,
         constraint = user_lp_token_account.mint == lp_token_mint.key(),
@@ -244,7 +288,44 @@ pub struct Withdraw<'info> {
 }
 
 #[derive(Accounts)]
-pub struct BotPlay {}
+pub struct BotPlay<'info> {
+    #[account(
+        seeds = [POOL_SEED.as_ref(), &pool.seed.to_le_bytes()],
+        bump,
+    )]
+    pub pool: Account<'info, Pool>,
+
+    #[account(mut, seeds = [AUTHORITY_SEED.as_ref(), pool.key().as_ref()], bump)]
+    pub pool_authority: AccountInfo<'info>,
+
+    #[account(constraint = pool_authority_player_info.owner.key() == pool_authority.key())]
+    pub pool_authority_player_info: Account<'info, PlayerInfo>,
+
+    #[account(
+        seeds = [MINT_SEED.as_ref(), pool.key().as_ref()],
+        bump,
+    )]
+    pub lp_token_mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        seeds = [b"game".as_ref(), &game.seed.to_le_bytes()],
+        bump,
+    )]
+    pub game: Account<'info, Game>,
+    #[account(mut, seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
+    pub game_authority: AccountInfo<'info>,
+
+    #[account(
+        mut,
+        constraint = pool.bot_authority == bot_authority.key()
+    )]
+    pub bot_authority: Signer<'info>,
+
+    pub rps_program: Program<'info, Rps>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
 
 #[account]
 #[derive()]
