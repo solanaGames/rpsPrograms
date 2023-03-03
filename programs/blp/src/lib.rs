@@ -342,9 +342,6 @@ pub struct Pool {
 
     // lp token mint for pool depositors
     pub lp_token_mint: Pubkey,
-    // actually i guess this isn't possible
-    // // amount which is currently locked in games
-    // pub in_games_amount: u64,
 }
 
 impl Pool {
