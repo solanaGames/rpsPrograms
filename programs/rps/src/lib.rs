@@ -455,6 +455,7 @@ pub struct CreateGame<'info> {
     pub player: Signer<'info>,
 
     #[account(
+        mut,
         seeds = [b"player_info".as_ref(), player.key().as_ref()],
         bump,
         constraint = player_info.owner == player.key()
@@ -474,6 +475,7 @@ pub struct JoinGame<'info> {
     player: Signer<'info>,
 
     #[account(
+        mut,
         seeds = [b"player_info".as_ref(), player.key().as_ref()],
         bump,
         constraint = player_info.owner == player.key()
@@ -507,6 +509,7 @@ pub struct RevealGame<'info> {
     pub player: Signer<'info>,
 
     #[account(
+        mut,
         seeds = [b"player_info".as_ref(), player.key().as_ref()],
         bump,
         constraint = player_info.owner == player.key()
@@ -529,6 +532,7 @@ pub struct ExpireGame<'info> {
     pub player: AccountInfo<'info>,
 
     #[account(
+        mut,
         seeds = [b"player_info".as_ref(), player.key().as_ref()],
         bump,
         constraint = player_info.owner == player.key()
@@ -549,6 +553,7 @@ pub struct SettleGame<'info> {
     #[account(mut, constraint = Some(player_1.key()) == game.player_1())]
     pub player_1: AccountInfo<'info>,
     #[account(
+        mut,
         seeds = [b"player_info".as_ref(), player_1.key().as_ref()],
         bump,
         constraint = player_1_info.owner == player_1.key()
@@ -559,6 +564,7 @@ pub struct SettleGame<'info> {
     #[account(mut, constraint = Some(player_2.key()) == game.player_2())]
     pub player_2: AccountInfo<'info>,
     #[account(
+        mut,
         seeds = [b"player_info".as_ref(), player_2.key().as_ref()],
         bump,
         constraint = player_2_info.owner == player_2.key()

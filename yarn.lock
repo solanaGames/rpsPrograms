@@ -9,9 +9,10 @@
   dependencies:
     regenerator-runtime "^0.13.11"
 
-"@coral-xyz/anchor@https://gitpkg.now.sh/nojob1/anchor/ts/packages/anchor?master":
+"@coral-xyz/anchor@^0.26.0":
   version "0.26.0"
-  resolved "https://gitpkg.now.sh/nojob1/anchor/ts/packages/anchor?master#130a042fa9140a66405a772d15179f177632e10a"
+  resolved "https://registry.yarnpkg.com/@coral-xyz/anchor/-/anchor-0.26.0.tgz#c8e4f7177e93441afd030f22d777d54d0194d7d1"
+  integrity sha512-PxRl+wu5YyptWiR9F2MBHOLLibm87Z4IMUBPreX+DYBtPM+xggvcPi0KAN7+kIL4IrIhXI8ma5V0MCXxSN1pHg==
   dependencies:
     "@coral-xyz/borsh" "^0.26.0"
     "@solana/web3.js" "^1.68.0"

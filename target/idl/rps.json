@@ -38,7 +38,7 @@
         },
         {
           "name": "playerInfo",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
@@ -93,7 +93,7 @@
         },
         {
           "name": "playerInfo",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
@@ -142,7 +142,7 @@
         },
         {
           "name": "playerInfo",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         }
       ],
@@ -177,7 +177,7 @@
         },
         {
           "name": "playerInfo",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         }
       ],
@@ -198,7 +198,7 @@
         },
         {
           "name": "player1Info",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
@@ -208,7 +208,7 @@
         },
         {
           "name": "player2Info",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
@@ -655,5 +655,8 @@
       "name": "MathOverflow",
       "msg": "Math Overflow"
     }
-  ]
+  ],
+  "metadata": {
+    "address": "rpsVN2ZC1K9hoGPs83xahjWo46cDNP49Tk7rQb56ipE"
+  }
 }

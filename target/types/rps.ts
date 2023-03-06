@@ -38,7 +38,7 @@ export type Rps = {
         },
         {
           "name": "playerInfo",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
@@ -93,7 +93,7 @@ export type Rps = {
         },
         {
           "name": "playerInfo",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
@@ -142,7 +142,7 @@ export type Rps = {
         },
         {
           "name": "playerInfo",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         }
       ],
@@ -177,7 +177,7 @@ export type Rps = {
         },
         {
           "name": "playerInfo",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         }
       ],
@@ -198,7 +198,7 @@ export type Rps = {
         },
         {
           "name": "player1Info",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
@@ -208,7 +208,7 @@ export type Rps = {
         },
         {
           "name": "player2Info",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
@@ -698,7 +698,7 @@ export const IDL: Rps = {
         },
         {
           "name": "playerInfo",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
@@ -753,7 +753,7 @@ export const IDL: Rps = {
         },
         {
           "name": "playerInfo",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
@@ -802,7 +802,7 @@ export const IDL: Rps = {
         },
         {
           "name": "playerInfo",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         }
       ],
@@ -837,7 +837,7 @@ export const IDL: Rps = {
         },
         {
           "name": "playerInfo",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         }
       ],
@@ -858,7 +858,7 @@ export const IDL: Rps = {
         },
         {
           "name": "player1Info",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
@@ -868,7 +868,7 @@ export const IDL: Rps = {
         },
         {
           "name": "player2Info",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
