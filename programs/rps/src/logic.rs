@@ -236,7 +236,7 @@ pub fn process_action(
                         choice: player_2_choice,
                     },
                 config,
-                expiry_slot,
+                expiry_slot: _,
             },
             Actions::Reveal {
                 player_1_pubkey,
@@ -244,9 +244,6 @@ pub fn process_action(
                 choice,
             },
         ) => {
-            if slot > expiry_slot {
-                panic!("challenge expired");
-            }
             if p1 != player_1_pubkey {
                 panic!("player1 must reveal");
             }
