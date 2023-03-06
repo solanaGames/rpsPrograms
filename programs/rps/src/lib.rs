@@ -123,22 +123,6 @@ pub mod rps {
                     ),
                     ctx.accounts.game.wager_amount,
                 )?;
-                // transfer out the fee
-                anchor_lang::system_program::transfer(
-                    CpiContext::new_with_signer(
-                        ctx.accounts.system_program.to_account_info(),
-                        anchor_lang::system_program::Transfer {
-                            from: ctx.accounts.game_authority.to_account_info(),
-                            to: ctx.accounts.player.to_account_info(),
-                        },
-                        &[&[
-                            b"authority".as_ref(),
-                            ctx.accounts.game.key().as_ref(),
-                            &[*ctx.bumps.get("game_authority").unwrap()],
-                        ]],
-                    ),
-                    ctx.accounts.game.fee_amount,
-                )?;
             }
             _ => panic!("Invalid state"),
         };
@@ -198,6 +182,8 @@ pub mod rps {
             Clock::get()?.slot,
         );
 
+        let is_p1_expired = ctx.accounts.player_1.key() == ctx.accounts.player_2.key();
+
         ctx.accounts.player_1_info.amount_in_games = ctx
             .accounts
             .player_1_info
@@ -205,12 +191,14 @@ pub mod rps {
             .checked_sub(ctx.accounts.game.wager_amount)
             .ok_or(RpsError::MathOverflow)?;
 
-        ctx.accounts.player_2_info.amount_in_games = ctx
-            .accounts
-            .player_2_info
-            .amount_in_games
-            .checked_sub(ctx.accounts.game.wager_amount)
-            .ok_or(RpsError::MathOverflow)?;
+        if !is_p1_expired {
+            ctx.accounts.player_2_info.amount_in_games = ctx
+                .accounts
+                .player_2_info
+                .amount_in_games
+                .checked_sub(ctx.accounts.game.wager_amount)
+                .ok_or(RpsError::MathOverflow)?;
+        }
 
         match ctx.accounts.game.state {
             GameState::Settled {
@@ -242,31 +230,33 @@ pub mod rps {
                         payout_amount,
                     )?;
 
-                    ctx.accounts.player_1_info.games_won = ctx
-                        .accounts
-                        .player_1_info
-                        .games_won
-                        .checked_add(1)
-                        .ok_or(RpsError::MathOverflow)?;
-                    ctx.accounts.player_1_info.lifetime_earnings = ctx
-                        .accounts
-                        .player_1_info
-                        .lifetime_earnings
-                        .checked_add(ctx.accounts.game.wager_amount.try_into().unwrap())
-                        .ok_or(RpsError::MathOverflow)?;
+                    if !is_p1_expired {
+                        ctx.accounts.player_1_info.games_won = ctx
+                            .accounts
+                            .player_1_info
+                            .games_won
+                            .checked_add(1)
+                            .ok_or(RpsError::MathOverflow)?;
+                        ctx.accounts.player_1_info.lifetime_earnings = ctx
+                            .accounts
+                            .player_1_info
+                            .lifetime_earnings
+                            .checked_add(ctx.accounts.game.wager_amount.try_into().unwrap())
+                            .ok_or(RpsError::MathOverflow)?;
 
-                    ctx.accounts.player_2_info.games_lost = ctx
-                        .accounts
-                        .player_2_info
-                        .games_lost
-                        .checked_add(1)
-                        .ok_or(RpsError::MathOverflow)?;
-                    ctx.accounts.player_2_info.lifetime_earnings = ctx
-                        .accounts
-                        .player_2_info
-                        .lifetime_earnings
-                        .checked_sub(ctx.accounts.game.wager_amount.try_into().unwrap())
-                        .ok_or(RpsError::MathOverflow)?;
+                        ctx.accounts.player_2_info.games_lost = ctx
+                            .accounts
+                            .player_2_info
+                            .games_lost
+                            .checked_add(1)
+                            .ok_or(RpsError::MathOverflow)?;
+                        ctx.accounts.player_2_info.lifetime_earnings = ctx
+                            .accounts
+                            .player_2_info
+                            .lifetime_earnings
+                            .checked_sub(ctx.accounts.game.wager_amount.try_into().unwrap())
+                            .ok_or(RpsError::MathOverflow)?;
+                    }
                 }
                 Winner::P2 => {
                     anchor_lang::system_program::transfer(
@@ -360,6 +350,23 @@ pub mod rps {
             _ => panic!("Invalid state"),
         };
 
+        // transfer out the fee
+        anchor_lang::system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: ctx.accounts.game_authority.to_account_info(),
+                    to: ctx.accounts.player_2.to_account_info(),
+                },
+                &[&[
+                    b"authority".as_ref(),
+                    ctx.accounts.game.key().as_ref(),
+                    &[*ctx.bumps.get("game_authority").unwrap()],
+                ]],
+            ),
+            ctx.accounts.game.fee_amount,
+        )?;
+
         Ok(())
     }
 
@@ -371,23 +378,6 @@ pub mod rps {
                 player_2,
                 config: GameConfig { entry_proof },
             } => {
-                // fee just goes to player2 now
-                // anchor_lang::system_program::transfer(
-                //     CpiContext::new_with_signer(
-                //         ctx.accounts.system_program.to_account_info(),
-                //         anchor_lang::system_program::Transfer {
-                //             from: ctx.accounts.game_authority.to_account_info(),
-                //             to: ctx.accounts.cleaner.to_account_info(),
-                //         },
-                //         &[&[
-                //             b"authority".as_ref(),
-                //             ctx.accounts.game.key().as_ref(),
-                //             &[*ctx.bumps.get("game_authority").unwrap()],
-                //         ]],
-                //     ),
-                //     ctx.accounts.game.fee_amount,
-                // )?;
-
                 let gr = ReadableGameEvent {
                     event_name: "game_result".to_string(),
                     event_version: 1,
