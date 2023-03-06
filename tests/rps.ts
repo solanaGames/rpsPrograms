@@ -9,6 +9,7 @@ import {
 import { Rps, IDL } from "../target/types/rps";
 import { BN } from "bn.js";
 import { keccak_256 } from "js-sha3";
+import { expect, should } from "chai";
 
 describe("rps", () => {
   // Configure the client to use the local cluster.
@@ -64,10 +65,6 @@ describe("rps", () => {
       .signers([player])
       .rpc({ skipPreflight: true });
     console.log("Your transaction signature 0", tx0);
-    // const player1InfoAccountBefore = await program.account.playerInfo.fetch(
-    //   playerInfo
-    // );
-    // console.log(player1InfoAccountBefore);
 
     const [gameAuthority, _gameAuthorityBump] =
       PublicKey.findProgramAddressSync(
@@ -98,6 +95,11 @@ describe("rps", () => {
       .rpc({ skipPreflight: true });
 
     console.log("Your transaction signature", tx);
+    const player1InfoAccountGameCreated =
+      await program.account.playerInfo.fetch(playerInfo);
+    expect(player1InfoAccountGameCreated.amountInGames.toString()).eq(
+      "1000000"
+    );
 
     // const gameAccount = await program.account.game.fetch(game);
     // console.log("Your game account", gameAccount);
