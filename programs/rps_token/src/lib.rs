@@ -10,7 +10,7 @@ use logic::{process_action, Actions, GameConfig, GameState, Winner, RPS};
 use program::RpsToken;
 use serde::{Deserialize, Serialize};
 
-declare_id!("rpsVN2ZC1K9hoGPs83xahjWo46cDNP49Tk7rQb56ipE");
+declare_id!("rpsTRaRezREVQ9UqsGyNDqLo4mxP7pDaBZPNRnUpdqN");
 
 pub mod game_cleaner {
     solana_program::declare_id!("rcxrvoLEpa65dqqRVEqAADicpNnhWBwtWtzyFHZMzKW");

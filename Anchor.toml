@@ -3,6 +3,7 @@ seeds = false
 skip-lint = false
 [programs.localnet]
 rps = "rpsVN2ZC1K9hoGPs83xahjWo46cDNP49Tk7rQb56ipE"
+rps-token = "rpsTRaRezREVQ9UqsGyNDqLo4mxP7pDaBZPNRnUpdqN"
 
 [registry]
 url = "https://api.apr.dev"
