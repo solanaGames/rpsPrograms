@@ -3,7 +3,7 @@ seeds = false
 skip-lint = false
 [programs.localnet]
 rps = "rpsVN2ZC1K9hoGPs83xahjWo46cDNP49Tk7rQb56ipE"
-rps-token = "rpsTRaRezREVQ9UqsGyNDqLo4mxP7pDaBZPNRnUpdqN"
+rps_token = "rpsTRaRezREVQ9UqsGyNDqLo4mxP7pDaBZPNRnUpdqN"
 
 [registry]
 url = "https://api.apr.dev"
@@ -13,4 +13,6 @@ cluster = "Localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+# test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/rps_token.ts"
+# test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/rps.ts"
