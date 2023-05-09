@@ -39,7 +39,7 @@ describe("rps_token", () => {
 
   it("Is initialized!", async () => {
     const player = anchor.web3.Keypair.generate();
-    const gameSeed = new BN(3);
+    const gameSeed = new BN(4);
     const wagerAmount = new BN(1000000);
     const salt = Math.floor(Math.random() * 10000000);
     const player1Choice = 1;
@@ -104,6 +104,7 @@ describe("rps_token", () => {
       program.programId
     );
 
+    console.log(program.programId.toString());
     console.log(game.toBase58());
 
     // const escrowTokenAccount = await getAssociatedTokenAddress(
@@ -145,16 +146,16 @@ describe("rps_token", () => {
     const tx = await program.methods
       .createGame(gameSeed, commitment.toJSON().data, wagerAmount, null)
       .accounts({
-        mint,
-        playerInfo: playerInfo,
-        systemProgram: anchor.web3.SystemProgram.programId,
-        game,
+        game: game,
         player: player.publicKey,
-        playerTokenAccount,
+        mint: mint,
+        playerTokenAccount: playerTokenAccount,
+        playerInfo: playerInfo,
         gameAuthority: gameAuthority,
-        escrowTokenAccount,
+        escrowTokenAccount: escrowTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
       })
       .signers([player])
       .rpc({ skipPreflight: true });

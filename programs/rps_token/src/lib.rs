@@ -465,7 +465,7 @@ pub struct CreateGame<'info> {
         payer = player,
         space = Game::space()
     )]
-    pub game: Account<'info, Game>,
+    pub game: Box<Account<'info, Game>>,
 
     #[account(mut)]
     pub player: Signer<'info>,
@@ -481,7 +481,7 @@ pub struct CreateGame<'info> {
         bump,
         constraint = player_info.owner == player.key()
     )]
-    pub player_info: Account<'info, PlayerInfo>,
+    pub player_info: Box<Account<'info, PlayerInfo>>,
 
     /// CHECK: this is a pda that manages the escrow account
     #[account(mut, seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
@@ -644,7 +644,6 @@ pub struct CleanGame<'info> {
         bump,
     )]
     pub game: Account<'info, Game>,
-    
 
     /// CHECK: this is a pda that manages the escrow account
     #[account(seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
@@ -666,7 +665,7 @@ pub struct CleanGame<'info> {
     /// CHECK: this is just the play1 account we check in the constraint i matches the one on the game
     #[account(mut, constraint = Some(player_1.key()) == game.player_1())]
     pub player_1: AccountInfo<'info>,
-    
+
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 
