@@ -384,6 +384,22 @@ pub mod rps_token {
     }
 
     pub fn clean_game(ctx: Context<CleanGame>) -> Result<()> {
+        // close escrow token account and send to player 1
+        anchor_spl::token::close_account(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::CloseAccount {
+                    account: ctx.accounts.escrow_token_account.to_account_info(),
+                    destination: ctx.accounts.player_1.to_account_info(),
+                    authority: ctx.accounts.game_authority.to_account_info(),
+                },
+                &[&[
+                    b"authority".as_ref(),
+                    ctx.accounts.game.key().as_ref(),
+                    &[*ctx.bumps.get("game_authority").unwrap()],
+                ]],
+            ),
+        )?;
         match ctx.accounts.game.state {
             GameState::Settled {
                 result,
@@ -511,7 +527,7 @@ pub struct JoinGame<'info> {
 
     #[account(
         mut,
-        seeds = [b"player_info".as_ref(), player.key().as_ref()],
+        seeds = [b"player_info".as_ref(), player.key().as_ref(), game.mint.key().as_ref()],
         bump,
         constraint = player_info.owner == player.key()
     )]
@@ -522,7 +538,7 @@ pub struct JoinGame<'info> {
         seeds = [b"game".as_ref(), &game.seed.to_le_bytes()],
         bump,
     )]
-    pub game: Account<'info, Game>,
+    pub game: Box<Account<'info, Game>>,
 
     /// CHECK: this is a pda that manages the escrow account
     #[account(mut, seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
@@ -547,14 +563,14 @@ pub struct RevealGame<'info> {
         seeds = [b"game".as_ref(), &game.seed.to_le_bytes()],
         bump,
     )]
-    pub game: Account<'info, Game>,
+    pub game: Box<Account<'info, Game>>,
 
     #[account(constraint = Some(player.key()) == game.player_1() || Some(player.key()) == game.player_2())]
     pub player: Signer<'info>,
 
     #[account(
         mut,
-        seeds = [b"player_info".as_ref(), player.key().as_ref()],
+        seeds = [b"player_info".as_ref(), player.key().as_ref(), game.mint.key().as_ref()],
         bump,
         constraint = player_info.owner == player.key()
     )]
@@ -568,7 +584,7 @@ pub struct ExpireGame<'info> {
         seeds = [b"game".as_ref(), &game.seed.to_le_bytes()],
         bump,
     )]
-    pub game: Account<'info, Game>,
+    pub game: Box<Account<'info, Game>>,
 
     /// CHECK: anyone can expire the game and the default winning player is
     /// checked in the game logic code so this doesn't need to be a signer
@@ -577,7 +593,7 @@ pub struct ExpireGame<'info> {
 
     #[account(
         mut,
-        seeds = [b"player_info".as_ref(), player.key().as_ref()],
+        seeds = [b"player_info".as_ref(), player.key().as_ref(), game.mint.key().as_ref()],
         bump,
         constraint = player_info.owner == player.key()
     )]
@@ -591,7 +607,7 @@ pub struct SettleGame<'info> {
         seeds = [b"game".as_ref(), &game.seed.to_le_bytes()],
         bump,
     )]
-    pub game: Account<'info, Game>,
+    pub game: Box<Account<'info, Game>>,
 
     /// CHECK: how do i make this check that it's the one in the enum lmao?
     #[account(mut, constraint = Some(player_1.key()) == game.player_1())]
@@ -600,7 +616,7 @@ pub struct SettleGame<'info> {
     pub player1_token_account: Account<'info, TokenAccount>,
     #[account(
         mut,
-        seeds = [b"player_info".as_ref(), player_1.key().as_ref()],
+        seeds = [b"player_info".as_ref(), player_1.key().as_ref(), game.mint.key().as_ref()],
         bump,
         constraint = player_1_info.owner == player_1.key()
     )]
@@ -613,7 +629,7 @@ pub struct SettleGame<'info> {
     pub player2_token_account: Account<'info, TokenAccount>,
     #[account(
         mut,
-        seeds = [b"player_info".as_ref(), player_2.key().as_ref()],
+        seeds = [b"player_info".as_ref(), player_2.key().as_ref(), game.mint.key().as_ref()],
         bump,
         constraint = player_2_info.owner == player_2.key()
     )]
@@ -643,14 +659,13 @@ pub struct CleanGame<'info> {
         seeds = [b"game".as_ref(), &game.seed.to_le_bytes()],
         bump,
     )]
-    pub game: Account<'info, Game>,
+    pub game: Box<Account<'info, Game>>,
 
     /// CHECK: this is a pda that manages the escrow account
     #[account(seeds = [b"authority".as_ref(), game.key().as_ref()], bump)]
     pub game_authority: AccountInfo<'info>,
 
     #[account(mut,
-        close = player_1,
         seeds = [b"escrow".as_ref(), game.key().as_ref()],
         bump,
         token::mint = game.mint,
